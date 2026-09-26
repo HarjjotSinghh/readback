@@ -1,0 +1,23 @@
+[package]
+name = "readback-core"
+description = "Reliability layer for speech-to-text. Catches transcription errors that change what the speaker meant."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+similar = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["adapters"]
+adapters = []

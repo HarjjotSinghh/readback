@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/readback-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/HarjjotSinghh/readback"
+homepage = "https://github.com/HarjjotSinghh/readback"
+authors = ["Harjot Singh Rana <harjot@whiskeylibrary.com>"]
+keywords = ["speech", "asr", "dictation", "transcription", "reliability"]
+categories = ["multimedia::audio", "text-processing"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+similar = "3"
+thiserror = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

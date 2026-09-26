@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+.DS_Store
+node_modules/
+dist/
+*.wav
+!crates/readback-bench/fixtures/**/*.wav
+.env
+.env.local
