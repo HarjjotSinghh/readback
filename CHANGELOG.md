@@ -7,6 +7,13 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-27
+
+### Changed
+
+- Corrected the author contact address before the first publish to crates.io,
+  where package metadata is permanent. Also set it on the npm package.
+
 ## [0.13.0] - 2026-09-27
 
 Everything needed for someone else's app to evaluate this without trusting a
@@ -569,7 +576,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.13.1
 [0.13.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.13.0
 [0.12.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.12.0
 [0.11.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.11.0

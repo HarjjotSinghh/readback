@@ -5,7 +5,7 @@
 [package]
 name = "readback-demo"
 description = "Reference desktop app for Readback, showing what the overlay UX looks like."
-version = "0.13.0"
+version = "0.13.1"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"

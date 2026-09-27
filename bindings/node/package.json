@@ -1,6 +1,6 @@
 {
   "name": "@readback/core",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Catch the words your dictation got wrong before you hit send. A local-first reliability layer for speech-to-text.",
   "keywords": [
     "speech-to-text",
@@ -11,6 +11,7 @@
     "reliability"
   ],
   "license": "MIT",
+  "author": "Harjot Singh Rana <me@harjotrana.com>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/HarjjotSinghh/readback.git",
