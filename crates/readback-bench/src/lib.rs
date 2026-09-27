@@ -20,11 +20,14 @@
 //! assert!(dataset::bundled().unwrap().len() >= 40);
 //! ```
 
+pub mod audio;
 pub mod dataset;
 pub mod metric;
 pub mod report;
 pub mod runner;
+pub mod vad;
 
+pub use audio::{AsrCommand, AudioCase};
 pub use dataset::Case;
 pub use metric::{ErrorClass, ErrorKind, Scores, SemanticError, score};
 pub use runner::{CaseResult, Report, Summary, run, run_case, summarise};

@@ -8,10 +8,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod vad;
 
 use app::{Request, Scenario, VerdictView};
 use readback_core::SpeechRegion;
+use readback_bench::vad;
 use serde::Serialize;
 use std::path::PathBuf;
 

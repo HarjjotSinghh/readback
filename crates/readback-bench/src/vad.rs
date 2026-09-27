@@ -1,10 +1,10 @@
 //! A small energy-based voice-activity detector.
 //!
 //! Readback's core never touches audio: the host supplies speech regions. This
-//! module is what a host would plug in, kept deliberately simple so the demo has
-//! no model to download. It is short-time energy with hysteresis, which is
-//! enough to show omission detection working on a real clip and nowhere near
-//! good enough to ship in a noisy room — use Silero or WebRTC VAD for that.
+//! module is what a host would plug in, kept deliberately simple so neither the
+//! benchmark nor the demo has a model to download. It is short-time energy with
+//! hysteresis, which is enough to find a dropped word in a clean clip and
+//! nowhere near good enough for a noisy room — use Silero or WebRTC VAD there.
 
 use readback_core::SpeechRegion;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,12 @@ pub struct VadConfig {
 
 impl Default for VadConfig {
     fn default() -> Self {
-        Self { frame_ms: 30, threshold_ratio: 2.5, min_speech_ms: 90, min_silence_ms: 120 }
+        Self {
+            frame_ms: 30,
+            threshold_ratio: 2.5,
+            min_speech_ms: 90,
+            min_silence_ms: 120,
+        }
     }
 }
 
@@ -107,7 +112,10 @@ pub fn detect(clip: &Clip, cfg: &VadConfig) -> Vec<SpeechRegion> {
     regions
         .into_iter()
         .map(|(start, end)| {
-            SpeechRegion::new(start as u32 * frame_ms, (end as u32 * frame_ms).min(clip.duration_ms()))
+            SpeechRegion::new(
+                start as u32 * frame_ms,
+                (end as u32 * frame_ms).min(clip.duration_ms()),
+            )
         })
         .filter(|r| r.duration_ms() >= cfg.min_speech_ms)
         .collect()
@@ -115,7 +123,8 @@ pub fn detect(clip: &Clip, cfg: &VadConfig) -> Vec<SpeechRegion> {
 
 /// Reads a WAV file and downmixes it to mono `f32`.
 pub fn read_wav(path: &std::path::Path) -> Result<Clip, String> {
-    let mut reader = hound::WavReader::open(path).map_err(|e| format!("opening {}: {e}", path.display()))?;
+    let mut reader =
+        hound::WavReader::open(path).map_err(|e| format!("opening {}: {e}", path.display()))?;
     let spec = reader.spec();
 
     let samples: Vec<f32> = match spec.sample_format {
@@ -145,7 +154,10 @@ pub fn read_wav(path: &std::path::Path) -> Result<Clip, String> {
             .collect()
     };
 
-    Ok(Clip { samples: mono, sample_rate: spec.sample_rate })
+    Ok(Clip {
+        samples: mono,
+        sample_rate: spec.sample_rate,
+    })
 }
 
 #[cfg(test)]
@@ -164,7 +176,10 @@ mod tests {
                 samples.push(phase.sin() * amplitude);
             }
         }
-        Clip { samples, sample_rate }
+        Clip {
+            samples,
+            sample_rate,
+        }
     }
 
     #[test]
@@ -174,7 +189,10 @@ mod tests {
 
     #[test]
     fn an_empty_clip_is_handled() {
-        let empty = Clip { samples: Vec::new(), sample_rate: 16_000 };
+        let empty = Clip {
+            samples: Vec::new(),
+            sample_rate: 16_000,
+        };
         assert!(detect(&empty, &VadConfig::default()).is_empty());
     }
 
@@ -183,7 +201,10 @@ mod tests {
         let c = clip(&[(300, 0.0), (500, 0.4), (300, 0.0)]);
         let regions = detect(&c, &VadConfig::default());
         assert_eq!(regions.len(), 1);
-        assert!(regions[0].start_ms >= 240 && regions[0].start_ms <= 360, "{regions:?}");
+        assert!(
+            regions[0].start_ms >= 240 && regions[0].start_ms <= 360,
+            "{regions:?}"
+        );
         assert!(regions[0].duration_ms() >= 400, "{regions:?}");
     }
 

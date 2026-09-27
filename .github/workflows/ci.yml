@@ -74,3 +74,5 @@ jobs:
       # The numbers are printed on every run so a regression is visible in the
       # log rather than only in a failing assertion.
       - run: cargo run --release --bin readback-bench -- run
+      # The audio harness is exercised by its integration tests against a stub
+      # engine; generating fixtures needs macOS `say`, so it is not run here.

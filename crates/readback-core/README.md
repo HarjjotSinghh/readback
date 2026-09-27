@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.6"
+readback-core = "0.7"
 ```
 
 ```rust
@@ -308,13 +308,15 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.6.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.7.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
 What is not done, and is worth knowing before adopting:
 
-- The benchmark is text-level, so it cannot rank recognition engines.
+- The bundled dataset is text-level. The audio harness lifts that limit, but
+  the fixtures it generates are text-to-speech, which is far cleaner than real
+  speech.
 - Multi-word number compounds such as `twenty five` are not reduced to a value.
 - There is no Python or Swift binding yet, and no local decision-model scorer.
 

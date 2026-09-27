@@ -7,6 +7,47 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-27
+
+Audio. The benchmark can now measure a recogniser, not just a reliability layer.
+
+### Added
+
+- **`readback-bench audio`**: runs the benchmark against real clips using an
+  external ASR command. `{wav}` in `--asr` is replaced with the clip path, and
+  whatever the command prints is parsed by the normal adapters, so any engine
+  emitting whisper.cpp, faster-whisper, Parakeet or `{"text": ...}` JSON works
+  without new code. `--cleanup` adds an LLM polish step, `--vad` turns on
+  voice-activity detection, and `--label` names the engine in the report.
+- **`readback-bench manifest`**: prints an audio manifest derived from the text
+  dataset, so every clip keeps the id, category and reference of the case it
+  came from and the two datasets cannot drift apart.
+- **`scripts/make-fixtures.sh`**: speaks every reference with macOS `say`,
+  producing 64 clips and a manifest. These are synthetic and far cleaner than
+  real speech; the script says so, and the manifest format accepts real
+  recordings just as happily.
+- **An evidence coverage line on every audio report.** An engine that returns a
+  bare string gives Readback nothing to reason about, and it will correctly pass
+  everything. Rather than leaving that looking like a failure, the report now
+  states how many clips arrived with confidence, timings, voice-activity regions
+  and a cleanup step, and says what to do about it.
+- `readback_bench::vad`, moved out of the demo app so the benchmark and the demo
+  share one implementation.
+
+### Changed
+
+- The demo app now depends on `readback_bench::vad` instead of carrying its own
+  copy.
+
+### Notes
+
+- **No real engine numbers are published.** Nothing in this repository has been
+  run against Whisper or Parakeet; the harness exists so that users can. The
+  verified runs used stand-in engines to prove the harness end to end.
+- Without word **timings**, voice-activity regions cannot be turned into
+  omission evidence. `--vad` will find speech and still report nothing, which
+  the coverage line now explains.
+
 ## [0.6.0] - 2026-09-27
 
 Numbers are compared by value, not by spelling. This removes the last piece of
@@ -255,7 +296,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.7.0
 [0.6.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.6.0
 [0.5.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.5.0
 [0.4.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.4.0

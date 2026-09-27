@@ -73,14 +73,13 @@ v0 has 64 cases across 15 categories, 26 of them controls.
 
 ### An important limitation
 
-**v0 is a text-level benchmark.** The recogniser errors are written by hand
-rather than produced by running audio through a model. So it measures *how a
+**The bundled dataset is text-level.** Its recogniser errors are written by hand
+rather than produced by running audio through a model, so it measures *how a
 reliability layer responds to a given error*, not *how often that error
-happens*. It cannot rank Whisper against Parakeet.
+happens*. On its own it cannot rank Whisper against Parakeet.
 
-Audio fixtures are the obvious next step, and would make the numbers comparable
-across engines. Until then, read the results as a response profile rather than
-an engine leaderboard.
+That is what the audio harness below is for. Read the text results as a response
+profile, and run the audio harness when you want engine numbers.
 
 The verdict mix is also not representative of real traffic: 38 of 64 cases are
 deliberately dangerous, so the hold rate here is far above what anyone would
@@ -157,6 +156,109 @@ real changes are still caught:
 Note what CSER does with a pure re-spelling: it scores **zero**, while WER still
 counts it as a word error. That contrast is the entire argument for the metric,
 and the `normalisation` category exists to keep it honest.
+
+## Running it against real audio
+
+The text dataset measures how a reliability layer *responds* to an error. It
+cannot measure how often an engine *makes* one. The audio harness closes that
+gap: point it at clips and an ASR command, and the same CSER machinery scores
+what the engine actually produced.
+
+### Generating fixtures
+
+```bash
+scripts/make-fixtures.sh            # writes fixtures/clips + fixtures/manifest.jsonl
+READBACK_VOICE=Daniel scripts/make-fixtures.sh
+```
+
+The script speaks every reference in the text dataset with macOS `say`, so the
+two datasets stay in step: each clip keeps the id, category and reference of the
+text case it came from.
+
+**These are synthetic.** Text-to-speech is clean, evenly paced and never
+mumbles, so an engine will score far better here than on real speech. Treat the
+numbers as a floor and a regression guard, not as a claim about field accuracy.
+The manifest format does not care where a clip came from — replace them with
+real recordings when you have them:
+
+```json
+{"id":"neg-001","category":"negation","reference":"never merge a change like this","wav":"clips/neg-001.wav"}
+```
+
+### Running an engine
+
+```bash
+readback-bench audio --manifest fixtures/manifest.jsonl --vad \
+  --asr 'whisper-cli -f {wav} --output-json-full -oj -of /tmp/rb && cat /tmp/rb.json'
+```
+
+`{wav}` is replaced with the clip path. Whatever the command prints to stdout is
+parsed by the normal adapters, so any engine that emits whisper.cpp,
+faster-whisper, Parakeet or `{"text": ...}` JSON works without new code. Plain
+text works too.
+
+| Flag         | Meaning                                                          |
+| ------------ | ---------------------------------------------------------------- |
+| `--asr`      | The engine command. Must contain `{wav}`.                         |
+| `--label`    | Name for the engine in the report. Defaults to the program name.  |
+| `--cleanup`  | An LLM polish step. Must contain `{text}`; stdout is the result.  |
+| `--vad`      | Run voice-activity detection so dropped words can be found.       |
+| `--markdown` | A table for pasting into a README.                                |
+
+### Ask your engine for word-level output
+
+This is the part that decides whether the run means anything. Every audio report
+ends with a coverage line:
+
+```
+  evidence supplied              0/64 confidence   0/64 timings   62/64 vad   0/64 cleanup
+  the engine reported text only, and no cleanup step was given, so there
+  was nothing for Readback to reason about.
+```
+
+An engine that returns a bare string gives Readback nothing to work with, and it
+will correctly pass everything. Use `whisper-cli --output-json-full`, or
+faster-whisper with `word_timestamps=True`. Without **timings**, voice-activity
+regions cannot be turned into omission evidence, so `--vad` will find speech and
+still report nothing.
+
+### What a run looks like
+
+Two stand-in engines, over the 64 generated clips (100.6 s of audio). Neither is
+a real recogniser; they exist to show what the harness measures.
+
+A **perfect engine** — everything correct:
+
+```
+  critical semantic error rate      0.000      0.000
+  pass / highlight / hold          100.0% / 0.0% / 0.0%
+```
+
+Nothing flagged, nothing held. That is the control for the harness itself.
+
+A **word-level engine with a cleanup step that deletes negations**, which is the
+failure everyone actually reports:
+
+```
+                                 baseline   readback
+  word error rate                   0.050      0.000
+  critical semantic error rate      0.087      0.000
+  silent meaning flips              21.9%       0.0%
+
+  caught                           100.0%
+  evidence supplied             64/64 confidence   64/64 timings   62/64 vad   64/64 cleanup
+```
+
+Two honest notes on that run. The false hold rate reads 11.5%, but those are
+controls whose negations the stand-in cleanup stripped as well — `don't merge
+this before Friday` really was broken, so holding it is correct, and the
+`benign` flag simply came from the text dataset where the cleanup behaved. And
+voice-activity detection found speech in 62 of 64 clips; the two misses are the
+shortest utterances.
+
+**No real engine numbers are published here.** Nothing in this repository has
+been run against Whisper or Parakeet. The harness exists so that you can, and
+the report will say plainly what evidence your engine handed over.
 
 ## Adding cases
 

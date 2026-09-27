@@ -2,7 +2,8 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use readback_bench::{dataset, metric, report, runner};
+use readback_bench::audio::{AsrCommand, AudioCase, CleanupCommand};
+use readback_bench::{audio, dataset, metric, report, runner};
 use readback_core::config::Config;
 use readback_core::lexicon::{Lexicon, Locale};
 use std::path::PathBuf;
@@ -59,6 +60,57 @@ enum Command {
 
         #[arg(long)]
         json: bool,
+    },
+
+    /// Run the benchmark against real audio using an external ASR command.
+    ///
+    /// The engine is whatever `--asr` names, so this measures the engine as well
+    /// as the reliability layer — which the text dataset cannot do.
+    Audio {
+        /// A JSONL manifest of clips. Generate one with `scripts/make-fixtures.sh`.
+        #[arg(long, value_name = "FILE")]
+        manifest: PathBuf,
+
+        /// Command producing a transcript. `{wav}` is replaced with the clip path.
+        #[arg(long, value_name = "CMD")]
+        asr: String,
+
+        /// Name for this engine in the report. Defaults to the program name.
+        #[arg(long, value_name = "NAME")]
+        label: Option<String>,
+
+        /// Optional LLM polish step. `{text}` is replaced with the transcript.
+        #[arg(long, value_name = "CMD")]
+        cleanup: Option<String>,
+
+        /// Run voice-activity detection so dropped words can be found.
+        #[arg(long)]
+        vad: bool,
+
+        #[arg(long, value_name = "CATEGORY")]
+        category: Option<String>,
+
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
+
+        #[arg(long)]
+        json: bool,
+
+        #[arg(long, conflicts_with = "json")]
+        markdown: bool,
+
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Print an audio manifest derived from the text dataset.
+    ///
+    /// Every entry keeps the id, category and reference of the text case it came
+    /// from, so the two datasets cannot drift apart.
+    Manifest {
+        /// Directory the clips will live in, relative to the manifest.
+        #[arg(long, value_name = "DIR", default_value = "clips")]
+        clips: PathBuf,
     },
 
     /// List the cases in a dataset.
@@ -142,6 +194,79 @@ fn main() -> Result<()> {
                     }
                 }
                 println!();
+            }
+        }
+
+        Command::Manifest { clips } => {
+            for case in audio::manifest_from_dataset(&clips)? {
+                println!("{}", serde_json::to_string(&case)?);
+            }
+        }
+
+        Command::Audio {
+            manifest,
+            asr,
+            label,
+            cleanup,
+            vad,
+            category,
+            config,
+            json,
+            markdown,
+            verbose,
+        } => {
+            let mut cases: Vec<AudioCase> = audio::load_manifest(&manifest)?;
+            if let Some(category) = &category {
+                cases.retain(|c| &c.category == category);
+            }
+            anyhow::ensure!(!cases.is_empty(), "no clips matched");
+
+            let asr = AsrCommand::new(asr, label)?;
+            let cleanup = cleanup.map(CleanupCommand::new).transpose()?;
+            let base = manifest
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+            let bench = bench_config(config.as_ref())?;
+
+            let mut results = Vec::with_capacity(cases.len());
+            for case in &cases {
+                results.push(audio::run_case(
+                    case,
+                    &base,
+                    &asr,
+                    cleanup.as_ref(),
+                    vad,
+                    &bench,
+                )?);
+            }
+
+            let scored: Vec<_> = results.iter().map(|r| r.case.clone()).collect();
+            let summary = runner::summarise(&scored);
+            let coverage = audio::coverage(&results, cleanup.is_some());
+
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "summary": summary,
+                        "coverage": coverage,
+                        "categories": runner::by_category(&scored),
+                        "clips": results,
+                    }))?
+                );
+            } else if markdown {
+                let report_data = runner::Report {
+                    summary,
+                    categories: runner::by_category(&scored),
+                    cases: scored,
+                };
+                print!("{}", report::render_markdown(&report_data));
+            } else {
+                print!(
+                    "{}",
+                    report::render_audio(&results, &summary, coverage, verbose)
+                );
             }
         }
 

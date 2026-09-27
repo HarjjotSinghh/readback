@@ -1,5 +1,6 @@
 //! Rendering a [`Report`](crate::runner::Report) for humans and for Markdown.
 
+use crate::audio::{AudioResult, Coverage};
 use crate::runner::{CaseResult, Report, Summary};
 use readback_core::Action;
 
@@ -192,6 +193,122 @@ pub fn render_markdown(report: &Report) -> String {
         pct(s.highlight_rate),
         pct(s.hold_rate)
     ));
+    out
+}
+
+/// The audio run. The headline is different from the text run: here the engine
+/// is what makes the mistakes, so the first thing to report is how often it
+/// changed the instruction at all.
+pub fn render_audio(
+    results: &[AudioResult],
+    summary: &Summary,
+    coverage: Coverage,
+    verbose: bool,
+) -> String {
+    let engine = results
+        .first()
+        .map(|r| r.engine.as_str())
+        .unwrap_or("unknown");
+    let total_ms: u32 = results.iter().map(|r| r.clip_ms).sum();
+    let flips = crate::audio::engine_flips(results);
+    let silent = crate::audio::silent_flips(results);
+
+    let mut out = String::new();
+    out.push('\n');
+    out.push_str(&format!(
+        "  CriticalSpeechBench (audio) — {} clips, {:.1}s, engine: {engine}\n\n",
+        results.len(),
+        total_ms as f32 / 1000.0
+    ));
+
+    out.push_str(&summary_table(summary));
+    out.push('\n');
+    out.push_str(&format!(
+        "  {:<28} {:>10}   the engine changed the instruction\n",
+        "engine meaning flips",
+        pct(summary.baseline_silent_flip_rate)
+    ));
+    out.push_str(&behaviour_table(summary));
+
+    out.push('\n');
+    out.push_str(&format!(
+        "  {:<28} {:>3}/{} confidence   {}/{} timings   {}/{} vad   {}/{} cleanup\n",
+        "evidence supplied",
+        coverage.with_confidence,
+        coverage.clips,
+        coverage.with_timings,
+        coverage.clips,
+        coverage.with_speech_regions,
+        coverage.clips,
+        coverage.with_cleanup,
+        coverage.clips,
+    ));
+    if coverage.is_blind() {
+        out.push_str(
+            "  the engine reported text only, and no cleanup step was given, so there\n  \
+             was nothing for Readback to reason about. Ask the engine for word-level\n  \
+             output (whisper.cpp --output-json-full, faster-whisper word timestamps).\n",
+        );
+    } else if coverage.with_timings == 0 && coverage.with_speech_regions > 0 {
+        out.push_str(
+            "  voice-activity regions were found but the engine gave no word timings,\n  \
+             so gaps cannot be located and omission detection stayed silent.\n",
+        );
+    }
+
+    if !flips.is_empty() {
+        out.push_str(&format!(
+            "\n  the engine changed the meaning ({}):\n",
+            flips.len()
+        ));
+        for result in &flips {
+            out.push_str(&format!(
+                "    {:<10} said:  {}\n",
+                result.case.id, result.case.readback_text
+            ));
+            out.push_str(&format!("    {:<10} heard: {}\n", "", result.heard));
+            out.push_str(&format!(
+                "    {:<10} {}\n",
+                "",
+                if result.case.action == Action::Pass {
+                    "pasted silently"
+                } else {
+                    "flagged"
+                }
+            ));
+        }
+    }
+
+    if !silent.is_empty() {
+        out.push_str(&format!(
+            "\n  reached the user unflagged ({}):\n",
+            silent.len()
+        ));
+        for result in &silent {
+            out.push_str(&format!(
+                "    {:<10} {}\n",
+                result.case.id, result.case.readback_text
+            ));
+        }
+    }
+
+    if verbose {
+        out.push_str("\n  clips:\n");
+        for result in results {
+            out.push_str(&format!(
+                "    {:<10} {:<12} {:<10} {:>6}ms  {} region(s)  cser {:.3} -> {:.3}\n",
+                result.case.id,
+                result.case.category,
+                action_name(result.case.action),
+                result.clip_ms,
+                result.speech_regions,
+                result.case.baseline.cser,
+                result.case.readback.cser
+            ));
+        }
+    }
+
+    out.push('\n');
     out
 }
 
