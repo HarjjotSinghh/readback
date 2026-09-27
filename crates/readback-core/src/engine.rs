@@ -3,10 +3,11 @@
 use crate::config::Config;
 use crate::guard::{GuardOutcome, check_cleanup};
 use crate::lexicon::Lexicon;
+use crate::omission;
 use crate::scorer::{RulesScorer, StakesScorer};
 use crate::suspicion::assess;
 use crate::tokenize::tokenize;
-use crate::types::{Context, Flag, Provenance, Transcript, Verdict};
+use crate::types::{AudioEvidence, Context, Flag, Provenance, Transcript, Verdict};
 
 /// One utterance, with whatever evidence the host app has.
 ///
@@ -19,6 +20,9 @@ pub struct CheckInput {
     /// The LLM-polished rewrite, when the host app runs one. Supplying this
     /// enables the Cleanup Guard, which is the cheapest win in the pipeline.
     pub cleaned: Option<String>,
+    /// Voice-activity regions from the host, enabling omission detection. Needs
+    /// word timings on `raw` to be useful.
+    pub audio: Option<AudioEvidence>,
     /// Where the text is headed.
     pub context: Context,
 }
@@ -28,6 +32,7 @@ impl CheckInput {
         Self {
             raw,
             cleaned: None,
+            audio: None,
             context: Context::default(),
         }
     }
@@ -43,6 +48,12 @@ impl CheckInput {
 
     pub fn with_context(mut self, context: Context) -> Self {
         self.context = context;
+        self
+    }
+
+    /// Supplies voice-activity regions so dropped words can be detected.
+    pub fn with_audio(mut self, audio: AudioEvidence) -> Self {
+        self.audio = Some(audio);
         self
     }
 }
@@ -124,7 +135,20 @@ impl Readback {
             },
         };
 
-        let suspicion = assess(&input.raw, &guard.text, &self.config.suspicion);
+        let mut suspicion = assess(&input.raw, &guard.text, &self.config.suspicion);
+
+        let omission = input.audio.as_ref().map(|audio| {
+            omission::detect(
+                audio,
+                &input.raw.primary.words,
+                &guard.text,
+                &self.config.omission,
+            )
+        });
+        if let Some(found) = &omission {
+            suspicion.score = suspicion.score.max(found.score);
+        }
+
         let tokens = tokenize(&guard.text);
         let stakes = self.scorer.score(&guard.text, &tokens, lexicon);
 
@@ -137,6 +161,9 @@ impl Readback {
 
         let mut flags: Vec<Flag> = guard.flags;
         flags.extend(suspicion.flags);
+        if let Some(found) = omission {
+            flags.extend(found.flags);
+        }
         flags.sort_by(|a, b| {
             b.severity
                 .cmp(&a.severity)
@@ -160,6 +187,7 @@ impl Readback {
                 primary_provider: input.raw.primary.provider.clone(),
                 cleanup_guard_ran: input.cleaned.is_some(),
                 cleanup_reverted: guard.reverted,
+                omission_check_ran: input.audio.is_some(),
                 scorer: self.scorer.name().to_string(),
             },
         }
@@ -169,7 +197,7 @@ impl Readback {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Action, FlagKind, Word};
+    use crate::types::{Action, AudioEvidence, FlagKind, Word};
 
     #[test]
     fn plain_text_with_no_evidence_passes() {
@@ -230,6 +258,31 @@ mod tests {
         );
         assert!(v.text.contains("Harpawan"));
         assert_eq!(v.flags[0].kind, FlagKind::ChangedProtectedTerm);
+    }
+
+    #[test]
+    fn a_vad_gap_is_reported_as_a_possible_omission() {
+        // "never" was spoken between 0.5s and 0.9s and never transcribed.
+        let raw = Transcript::from_words(vec![
+            Word::new("merge").with_timing(1000, 1400),
+            Word::new("production").with_timing(1400, 2000),
+        ]);
+        let v = Readback::recommended().check(
+            CheckInput::new(raw)
+                .with_audio(AudioEvidence::from_regions([(500, 2000)]))
+                .with_context(Context::for_app("Ghostty")),
+        );
+        assert!(v.flags.iter().any(|f| f.kind == FlagKind::PossibleOmission));
+        assert!(v.provenance.omission_check_ran);
+        assert_ne!(v.action, Action::Pass);
+    }
+
+    #[test]
+    fn without_audio_the_omission_stage_is_skipped() {
+        let raw = Transcript::from_words(vec![Word::new("merge").with_timing(1000, 1400)]);
+        let v = Readback::new().check(CheckInput::new(raw));
+        assert!(!v.provenance.omission_check_ran);
+        assert!(v.flags.is_empty());
     }
 
     #[test]

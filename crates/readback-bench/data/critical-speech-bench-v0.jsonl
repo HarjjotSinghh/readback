@@ -1,0 +1,59 @@
+{"id": "neg-001", "category": "negation", "reference": "never merge a change like this", "raw": "never merge a change like this", "cleaned": "Merge a change like this."}
+{"id": "neg-002", "category": "negation", "reference": "we should not merge this until Bobby checks it", "raw": "we should not merge this until Bobby checks it", "cleaned": "We should merge this once Bobby checks it."}
+{"id": "neg-003", "category": "negation", "reference": "do not delete the old staging tables", "raw": "do not delete the old staging tables", "cleaned": "Delete the old staging tables.", "app": "Ghostty"}
+{"id": "neg-004", "category": "negation", "reference": "i can't get to this today", "raw": "i can't get to this today", "cleaned": "I can get to this today."}
+{"id": "neg-005", "category": "negation", "reference": "don't restart production", "raw": "don't restart production", "cleaned": "Restart production.", "app": "Ghostty"}
+{"id": "neg-006", "category": "negation", "reference": "there is no need to redeploy", "raw": "there is no need to redeploy", "cleaned": "We need to redeploy."}
+{"id": "neg-007", "category": "negation", "reference": "we haven't shipped it yet", "raw": "we haven't shipped it yet", "cleaned": "We shipped it."}
+{"id": "neg-008", "category": "negation", "reference": "please don't force push to main", "raw": "please don't force push to main", "cleaned": "Please force push to main."}
+{"id": "env-001", "category": "environment", "reference": "deploy this to staging", "raw": "deploy this to staging", "cleaned": "Deploy this to production."}
+{"id": "env-002", "category": "environment", "reference": "run the migration on dev", "raw": "run the migration on dev", "cleaned": "Run the migration on prod.", "app": "Ghostty"}
+{"id": "env-003", "category": "environment", "reference": "point it at localhost", "raw": "point it at localhost", "cleaned": "Point it at live."}
+{"id": "env-004", "category": "environment", "reference": "the bug only happens on staging", "raw": "the bug only happens on staging", "cleaned": "The bug only happens on production."}
+{"id": "num-001", "category": "number", "reference": "set max retries to 15", "raw": "set max retries to 15", "cleaned": "Set max retries to 50."}
+{"id": "num-002", "category": "number", "reference": "send fifteen of them", "raw": "send fifteen of them", "cleaned": "Send fifty of them."}
+{"id": "num-003", "category": "number", "reference": "refund $50 to the customer", "raw": "refund $50 to the customer", "cleaned": "Refund $15 to the customer."}
+{"id": "num-004", "category": "number", "reference": "we need three replicas", "raw": "we need three replicas", "cleaned": "We need thirty replicas."}
+{"id": "tmp-001", "category": "temporal", "reference": "ship it before Friday", "raw": "ship it before Friday", "cleaned": "Ship it after Friday."}
+{"id": "tmp-002", "category": "temporal", "reference": "call me after the standup", "raw": "call me after the standup", "cleaned": "Call me before the standup."}
+{"id": "tmp-003", "category": "temporal", "reference": "merge it tomorrow", "raw": "merge it tomorrow", "cleaned": "Merge it today."}
+{"id": "dir-001", "category": "direction", "reference": "enable logging on the worker", "raw": "enable logging on the worker", "cleaned": "Disable logging on the worker."}
+{"id": "dir-002", "category": "direction", "reference": "increase the timeout to thirty seconds", "raw": "increase the timeout to thirty seconds", "cleaned": "Decrease the timeout to thirty seconds."}
+{"id": "dir-003", "category": "direction", "reference": "allow access to the bucket", "raw": "allow access to the bucket", "cleaned": "Deny access to the bucket."}
+{"id": "dir-004", "category": "direction", "reference": "revert the change", "raw": "revert the change", "cleaned": "Merge the change."}
+{"id": "qnt-001", "category": "quantifier", "reference": "only restart the worker", "raw": "only restart the worker", "cleaned": "Restart the worker."}
+{"id": "qnt-002", "category": "quantifier", "reference": "delete all the logs", "raw": "delete all the logs", "cleaned": "Delete the logs.", "app": "Ghostty"}
+{"id": "mod-001", "category": "modality", "reference": "we must ship today", "raw": "we must ship today", "cleaned": "We might ship today."}
+{"id": "mod-002", "category": "modality", "reference": "you should review it first", "raw": "you should review it first", "cleaned": "You could review it first."}
+{"id": "ent-001", "category": "entity", "reference": "ask Harpawan about the invoice", "raw": "ask Harpawan about the invoice", "cleaned": "Ask Harpreet about the invoice.", "vocabulary": ["Harpawan"]}
+{"id": "ent-002", "category": "entity", "reference": "push the segment to Klaviyo", "raw": "push the segment to Klaviyo", "cleaned": "Push the segment to Clavio.", "vocabulary": ["Klaviyo"]}
+{"id": "hin-001", "category": "hinglish", "reference": "abhi mat bhejo", "raw": "abhi mat bhejo", "cleaned": "Bhejo abhi."}
+{"id": "hin-002", "category": "hinglish", "reference": "ye nahi karna hai", "raw": "ye nahi karna hai", "cleaned": "Ye karna hai."}
+{"id": "hin-003", "category": "hinglish", "reference": "pehle test karo phir deploy karo", "raw": "pehle test karo phir deploy karo", "cleaned": "Deploy karo phir test karo."}
+{"id": "cnf-001", "category": "confidence", "reference": "deploy it to staging", "raw": "deploy it to production", "words": [{"text": "deploy", "start_ms": 0, "end_ms": 300, "confidence": 0.95}, {"text": "it", "start_ms": 300, "end_ms": 600, "confidence": 0.98}, {"text": "to", "start_ms": 600, "end_ms": 900, "confidence": 0.97}, {"text": "production", "start_ms": 900, "end_ms": 1200, "confidence": 0.41}]}
+{"id": "cnf-002", "category": "confidence", "reference": "set retries to fifteen", "raw": "set retries to fifty", "words": [{"text": "set", "start_ms": 0, "end_ms": 300, "confidence": 0.96}, {"text": "retries", "start_ms": 300, "end_ms": 600, "confidence": 0.93}, {"text": "to", "start_ms": 600, "end_ms": 900, "confidence": 0.98}, {"text": "fifty", "start_ms": 900, "end_ms": 1200, "confidence": 0.44}]}
+{"id": "cnf-003", "category": "confidence", "reference": "don't merge that branch", "raw": "do merge that branch", "words": [{"text": "do", "start_ms": 0, "end_ms": 300, "confidence": 0.38}, {"text": "merge", "start_ms": 300, "end_ms": 600, "confidence": 0.94}, {"text": "that", "start_ms": 600, "end_ms": 900, "confidence": 0.97}, {"text": "branch", "start_ms": 900, "end_ms": 1200, "confidence": 0.95}]}
+{"id": "omi-001", "category": "omission", "reference": "never merge this", "raw": "merge this", "words": [{"text": "merge", "start_ms": 1000, "end_ms": 1400, "confidence": 0.96}, {"text": "this", "start_ms": 1400, "end_ms": 1700, "confidence": 0.98}], "speech": [{"start_ms": 480, "end_ms": 1700}]}
+{"id": "omi-002", "category": "omission", "reference": "don't deploy to production", "raw": "deploy to production", "words": [{"text": "deploy", "start_ms": 1200, "end_ms": 1700, "confidence": 0.95}, {"text": "to", "start_ms": 1700, "end_ms": 1800, "confidence": 0.97}, {"text": "production", "start_ms": 1800, "end_ms": 2400, "confidence": 0.94}], "speech": [{"start_ms": 700, "end_ms": 2400}], "app": "Ghostty"}
+{"id": "ben-001", "category": "filler", "reference": "um so basically we uh need to deploy it tomorrow", "raw": "um so basically we uh need to deploy it tomorrow", "cleaned": "We need to deploy it tomorrow.", "benign": true}
+{"id": "ben-002", "category": "filler", "reference": "yeah lol sounds good to me", "raw": "yeah lol sounds good to me", "cleaned": "Sounds good to me.", "benign": true}
+{"id": "ben-003", "category": "paraphrase", "reference": "i'll send that over tomorrow", "raw": "i'll send that over tomorrow", "cleaned": "I'll send it over tomorrow.", "benign": true}
+{"id": "ben-004", "category": "filler", "reference": "the build finished a while back i think", "raw": "the build finished a while back i think", "cleaned": "The build finished a while back.", "benign": true}
+{"id": "ben-005", "category": "paraphrase", "reference": "can you take a look at the PR when you get a chance", "raw": "can you take a look at the PR when you get a chance", "cleaned": "Can you look at the PR when you get a chance?", "benign": true}
+{"id": "ben-006", "category": "correct", "reference": "we should merge this once Bobby checks it", "raw": "we should merge this once Bobby checks it", "cleaned": "We should merge this once Bobby checks it.", "benign": true}
+{"id": "ben-007", "category": "correct", "reference": "deploy this to staging", "raw": "deploy this to staging", "cleaned": "Deploy this to staging.", "benign": true}
+{"id": "ben-008", "category": "correct", "reference": "don't merge this before Friday", "raw": "don't merge this before Friday", "cleaned": "Don't merge this before Friday.", "benign": true}
+{"id": "ben-009", "category": "correct", "reference": "set max retries to 15", "raw": "set max retries to 15", "cleaned": "Set max retries to 15.", "benign": true}
+{"id": "ben-010", "category": "correct", "reference": "i think we're good to go", "raw": "i think we're good to go", "cleaned": "I think we're good to go.", "benign": true}
+{"id": "ben-011", "category": "paraphrase", "reference": "hey are you around", "raw": "hey are you around", "cleaned": "Hey, are you around?", "benign": true}
+{"id": "ben-012", "category": "paraphrase", "reference": "just pushed the fix", "raw": "just pushed the fix", "cleaned": "I just pushed the fix.", "benign": true}
+{"id": "ben-013", "category": "hinglish", "reference": "kal deploy karenge", "raw": "kal deploy karenge", "cleaned": "Kal deploy karenge.", "benign": true}
+{"id": "ben-014", "category": "hinglish", "reference": "abhi mat bhejo", "raw": "abhi mat bhejo", "cleaned": "Abhi mat bhejo.", "benign": true}
+{"id": "ben-015", "category": "correct", "reference": "ship it when CI passes", "raw": "ship it when CI passes", "words": [{"text": "ship", "start_ms": 0, "end_ms": 300, "confidence": 0.97}, {"text": "it", "start_ms": 300, "end_ms": 600, "confidence": 0.98}, {"text": "when", "start_ms": 600, "end_ms": 900, "confidence": 0.96}, {"text": "CI", "start_ms": 900, "end_ms": 1200, "confidence": 0.91}, {"text": "passes", "start_ms": 1200, "end_ms": 1500, "confidence": 0.95}], "benign": true}
+{"id": "ben-016", "category": "normalisation", "reference": "the meeting got moved to three", "raw": "the meeting got moved to three", "cleaned": "The meeting got moved to 3.", "benign": true}
+{"id": "ben-017", "category": "correct", "reference": "we can remove it", "raw": "we can remove it", "cleaned": "We can remove it.", "benign": true}
+{"id": "ben-018", "category": "filler", "reference": "so um I guess we could try that", "raw": "so um I guess we could try that", "cleaned": "I guess we could try that.", "benign": true}
+{"id": "ben-019", "category": "paraphrase", "reference": "restart the worker please", "raw": "restart the worker please", "cleaned": "Please restart the worker.", "benign": true}
+{"id": "ben-020", "category": "correct", "reference": "deploy it to staging", "raw": "deploy it to staging", "words": [{"text": "deploy", "start_ms": 0, "end_ms": 300, "confidence": 0.96}, {"text": "it", "start_ms": 300, "end_ms": 600, "confidence": 0.98}, {"text": "to", "start_ms": 600, "end_ms": 900, "confidence": 0.97}, {"text": "staging", "start_ms": 900, "end_ms": 1200, "confidence": 0.93}], "benign": true}
+{"id": "ben-021", "category": "correct", "reference": "never merge this without a review", "raw": "never merge this without a review", "cleaned": "Never merge this without a review.", "benign": true}
+{"id": "ben-022", "category": "filler", "reference": "okay so I think that's everything", "raw": "okay so I think that's everything", "cleaned": "I think that's everything.", "benign": true}

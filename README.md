@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.1"
+readback-core = "0.3"
 ```
 
 ```rust
@@ -154,6 +154,21 @@ plus the decoder-level hallucination tells: text written over near-silence,
 repetitive output, a low mean log-probability. Disagreement between two engines
 counts as evidence too.
 
+When the host also supplies voice-activity regions, this stage catches the one
+error class text can never see: a stretch of speech with no transcribed word
+aligned to it. "Merge a change like this" is perfectly grammatical, so no
+language model can tell that "never" used to be in front of it — but 400 ms of
+unexplained speech right before "merge" can.
+
+```rust
+let verdict = rb.check(
+    CheckInput::new(raw).with_audio(AudioEvidence::from_regions([(480, 1700)])),
+);
+```
+
+Readback never decodes audio itself. The host runs VAD with whatever it already
+has and passes the regions in.
+
 **4. Stakes scoring.** Not every message deserves scrutiny. `"lol sounds good"`
 with a shaky word is fine. `"Don't run the migration before Friday"` with a shaky
 word is not. The default scorer is deterministic rules over the same lexicon.
@@ -187,13 +202,45 @@ The sharpest case is voice-to-agent. An agent with shell access receiving
 *"delete the old staging tables"* when you said *"**don't** delete the old
 staging tables"* is not an embarrassing message. It's an incident.
 
+## Does it work?
+
+CriticalSpeechBench v0 — 59 cases, 22 of them controls where the stack behaved
+and a good layer should stay quiet.
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.220 | 0.080 |
+| Critical semantic error rate | 0.328 | 0.080 |
+| **Silent meaning flips** | **39.0%** | **0.0%** |
+
+Caught 100% of the baseline's meaning flips, and blocked **none** of the
+controls. One control was marked up unnecessarily: a cleanup step rewrote
+`three` as `3`, and the guard reverted it, because Readback cannot yet tell
+number *normalisation* from number *substitution*.
+
+```bash
+cargo run --bin readback-bench -- run
+```
+
+Read the caveat before quoting the numbers: **v0 is a text-level benchmark**.
+The recogniser errors are hand-written rather than produced from audio, so it
+measures how a reliability layer responds to a given error, not how often that
+error happens — it cannot rank Whisper against Parakeet. The verdict mix is not
+representative of real traffic either, since 37 of 59 cases are deliberately
+dangerous.
+
+Details, weights and the dataset format: [docs/benchmark.md](docs/benchmark.md).
+
 ## Honest limits
 
 - It cannot catch a word the recogniser got **confidently wrong** in a way that
   still sounds plausible — `merge` misheard as `purge` at 0.95 confidence looks
   exactly like a correct transcript from here.
-- It cannot yet recover a word that was **never transcribed at all**. That needs
-  the audio, and lands in v0.3 via voice-activity gaps against word timestamps.
+- Recovering a word that was **never transcribed at all** needs the audio. Pass
+  voice-activity regions alongside word timings and Readback will flag the gap,
+  but it is probabilistic and will fire in a noisy room.
+- It cannot tell number **normalisation** from number **substitution**, so a
+  cleanup step rewriting `three` as `3` is currently reverted.
 - **Flag fatigue is the real risk.** If more than about 5% of messages get held,
   people will rip it out. Calibrate for rare, precise flags. The benchmark in
   v0.3 exists to prove the tradeoff rather than assert it.
@@ -204,7 +251,7 @@ staging tables"* is not an embarrassing message. It's an incident.
 | ------- | -------------------------------------------------------------------- |
 | v0.1 ✅ | Core crate: adapters, Cleanup Guard, suspicion, rules scorer, policy  |
 | v0.2 ✅ | `readback` CLI — `check`, `diff`, `explain`, `lexicon`                 |
-| v0.3    | CSER metric and CriticalSpeechBench, plus VAD-gap omission detection  |
+| v0.3 ✅ | CSER metric and CriticalSpeechBench, plus VAD-gap omission detection  |
 | v0.4    | Node binding via napi-rs, published as `@readback/core`               |
 | v0.5    | Reference Tauri menu-bar app demonstrating the overlay UX             |
 
@@ -214,8 +261,8 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.2.0. The core pipeline and the CLI are implemented and tested; the API may
-still move before v1.0.
+v0.3.0. The pipeline, the CLI and the benchmark are implemented and tested;
+the API may still move before v1.0.
 
 ## License
 

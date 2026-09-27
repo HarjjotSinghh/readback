@@ -119,6 +119,47 @@ impl Transcript {
     }
 }
 
+/// A stretch of audio that voice-activity detection called speech.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeechRegion {
+    pub start_ms: u32,
+    pub end_ms: u32,
+}
+
+impl SpeechRegion {
+    pub fn new(start_ms: u32, end_ms: u32) -> Self {
+        Self { start_ms, end_ms }
+    }
+
+    pub fn duration_ms(&self) -> u32 {
+        self.end_ms.saturating_sub(self.start_ms)
+    }
+}
+
+/// What the host application learned from the audio itself.
+///
+/// Readback never decodes audio. The host runs voice-activity detection with
+/// whatever it already has — Silero, WebRTC VAD, an energy threshold — and
+/// passes the regions in. That is enough to notice a stretch of speech with no
+/// transcribed word aligned to it, which is the one error class text alone can
+/// never catch.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct AudioEvidence {
+    /// Regions VAD marked as speech, in milliseconds from the start of the clip.
+    pub speech: Vec<SpeechRegion>,
+}
+
+impl AudioEvidence {
+    pub fn from_regions(regions: impl IntoIterator<Item = (u32, u32)>) -> Self {
+        Self {
+            speech: regions
+                .into_iter()
+                .map(|(a, b)| SpeechRegion::new(a, b))
+                .collect(),
+        }
+    }
+}
+
 /// What the host application knows about where this text is headed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Context {
@@ -216,6 +257,9 @@ pub enum FlagKind {
     LowConfidence,
     /// Decoder-level hallucination tell (silence, repetition, low logprob).
     HallucinationSignal,
+    /// Voice-activity detection found speech that no transcribed word covers,
+    /// so a word was probably dropped here.
+    PossibleOmission,
 }
 
 impl FlagKind {
@@ -228,7 +272,8 @@ impl FlagKind {
             FlagKind::ChangedNumber
             | FlagKind::ChangedTemporal
             | FlagKind::ChangedQuantifier
-            | FlagKind::ChangedModality => Severity::High,
+            | FlagKind::ChangedModality
+            | FlagKind::PossibleOmission => Severity::High,
             FlagKind::ChangedProtectedTerm => Severity::Medium,
             FlagKind::LowConfidence | FlagKind::HallucinationSignal => Severity::Low,
         }
@@ -281,6 +326,9 @@ pub struct Provenance {
     pub primary_provider: Option<String>,
     pub cleanup_guard_ran: bool,
     pub cleanup_reverted: bool,
+    /// True when voice-activity regions were supplied and checked for gaps.
+    #[serde(default)]
+    pub omission_check_ran: bool,
     pub scorer: String,
 }
 

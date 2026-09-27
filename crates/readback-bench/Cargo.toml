@@ -1,0 +1,25 @@
+[package]
+name = "readback-bench"
+description = "CriticalSpeechBench and the Critical Semantic Error Rate: measuring whether a speech-to-text stack changed what you meant."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories = ["development-tools::profiling", "text-processing"]
+readme = "README.md"
+
+[[bin]]
+name = "readback-bench"
+path = "src/main.rs"
+
+[dependencies]
+readback-core = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+similar = { workspace = true }

@@ -1,6 +1,7 @@
 //! Configuration for a [`crate::Readback`] instance.
 
 use crate::lexicon::Locale;
+use crate::omission::OmissionConfig;
 use crate::policy::Policy;
 use crate::suspicion::SuspicionConfig;
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,8 @@ pub struct Config {
     #[serde(default)]
     pub suspicion: SuspicionConfig,
     #[serde(default)]
+    pub omission: OmissionConfig,
+    #[serde(default)]
     pub risk: RiskWeights,
 }
 
@@ -46,6 +49,7 @@ impl Default for Config {
             vocabulary: Vec::new(),
             policy: Policy::default(),
             suspicion: SuspicionConfig::default(),
+            omission: OmissionConfig::default(),
             risk: RiskWeights::default(),
         }
     }

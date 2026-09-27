@@ -7,6 +7,62 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-27
+
+Proof. A metric that can tell a dropped filler from a dropped negation, a
+dataset of the cases where one word inverts an instruction, and the one error
+class text alone can never catch.
+
+### Added
+
+- **Omission detection** (`readback_core::omission`). Given voice-activity
+  regions from the host alongside word timings, Readback finds stretches of
+  speech that no transcribed word covers and raises `PossibleOmission`. This is
+  the only way to notice a word that was never transcribed: "merge a change like
+  this" is perfectly grammatical, so no language model can tell that "never"
+  used to be in front of it. Readback never decodes audio itself — the host runs
+  VAD with whatever it already has and passes the regions in via
+  `CheckInput::with_audio`.
+- `AudioEvidence` and `SpeechRegion` types, an `OmissionConfig` section in
+  `Config`, and `Provenance::omission_check_ran`.
+- **`readback-bench`**, a new crate:
+  - The **Critical Semantic Error Rate**: errors weighted by the class of word
+    they touched, from 0.1 for punctuation to 5.0 for a negation. Punctuation is
+    excluded from the alignment, so a stack cannot improve its score by dropping
+    commas.
+  - **CriticalSpeechBench v0**: 59 cases across 15 categories, 22 of them
+    controls where the stack behaved and a good layer must stay quiet.
+  - A runner reporting baseline against Readback, a per-category breakdown, and
+    two explicit failure lists: cases missed, and noise raised on controls.
+  - `readback-bench run`, `score` and `cases` commands, with `--json` and
+    `--markdown` output.
+- [docs/benchmark.md](docs/benchmark.md) documenting the weights, the dataset
+  format and the benchmark's limitations.
+
+### Results
+
+CriticalSpeechBench v0, recommended config:
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.220 | 0.080 |
+| Critical semantic error rate | 0.328 | 0.080 |
+| Silent meaning flips | 39.0% | 0.0% |
+
+100% of the baseline's meaning flips were caught or repaired, and no control was
+blocked.
+
+### Known limits
+
+- v0 of the benchmark is **text-level**: recogniser errors are hand-written
+  rather than produced from audio, so it measures how a reliability layer
+  responds to an error, not how often that error occurs. It cannot rank engines.
+- Readback cannot tell number **normalisation** from number **substitution**, so
+  a cleanup step rewriting `three` as `3` is currently reverted. This shows up
+  as the single piece of noise on the controls.
+- Omission detection is probabilistic and will produce false positives in a
+  noisy room.
+
 ## [0.2.0] - 2026-09-27
 
 The `readback` command-line interface, plus the core API it needed.
@@ -73,6 +129,7 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.3.0
 [0.2.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.2.0
 [0.1.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.1.0

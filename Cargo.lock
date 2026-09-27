@@ -163,8 +163,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "readback-bench"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "readback-core",
+ "serde",
+ "serde_json",
+ "similar",
+]
+
+[[package]]
 name = "readback-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -174,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "readback-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",

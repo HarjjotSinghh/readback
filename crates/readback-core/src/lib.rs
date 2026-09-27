@@ -31,7 +31,8 @@
 //!
 //! 1. [`adapters`] normalise whatever the recogniser produced.
 //! 2. [`guard`] reverts cleanup edits that removed a protected token.
-//! 3. [`suspicion`] scores how shaky the recognition looks.
+//! 3. [`suspicion`] scores how shaky the recognition looks, and [`omission`]
+//!    finds speech that no transcribed word covers.
 //! 4. [`scorer`] scores how much a wrong word would cost here.
 //! 5. [`policy`] turns the combined risk into pass, highlight or hold.
 //!
@@ -39,8 +40,12 @@
 //!
 //! It cannot catch a word the recogniser got confidently wrong in a way that
 //! still sounds plausible: `merge` misheard as `purge` at 0.95 confidence looks
-//! exactly like a correct transcript from here. Recovering words that were
-//! never transcribed at all needs the audio, which arrives in a later version.
+//! exactly like a correct transcript from here.
+//!
+//! Words that were never transcribed at all *can* be caught, but only when the
+//! host supplies voice-activity regions alongside word timings — see
+//! [`omission`]. That check is probabilistic and will produce false positives in
+//! a noisy room.
 
 pub mod adapters;
 pub mod align;
@@ -49,6 +54,7 @@ pub mod engine;
 pub mod error;
 pub mod guard;
 pub mod lexicon;
+pub mod omission;
 pub mod policy;
 pub mod scorer;
 pub mod suspicion;
@@ -60,9 +66,10 @@ pub use engine::{CheckInput, Readback};
 pub use error::{AdapterError, Result};
 pub use guard::{GuardOutcome, check_cleanup};
 pub use lexicon::{Lexicon, Locale, SemanticClass};
+pub use omission::OmissionConfig;
 pub use policy::{AppPolicy, AppRule, Policy};
 pub use scorer::{RulesScorer, StakesScorer};
 pub use types::{
-    Action, Context, DecodeSignals, Flag, FlagKind, Hypothesis, Provenance, Severity, Span,
-    Transcript, Verdict, Word,
+    Action, AudioEvidence, Context, DecodeSignals, Flag, FlagKind, Hypothesis, Provenance,
+    Severity, Span, SpeechRegion, Transcript, Verdict, Word,
 };
