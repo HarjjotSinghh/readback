@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.5"
+readback-core = "0.6"
 ```
 
 ```rust
@@ -251,19 +251,17 @@ staging tables"* is not an embarrassing message. It's an incident.
 
 ## Does it work?
 
-CriticalSpeechBench v0 — 59 cases, 22 of them controls where the stack behaved
+CriticalSpeechBench v0 — 64 cases, 26 of them controls where the stack behaved
 and a good layer should stay quiet.
 
 | Metric | Baseline | Readback |
 |---|---:|---:|
-| Word error rate | 0.220 | 0.080 |
-| Critical semantic error rate | 0.328 | 0.080 |
-| **Silent meaning flips** | **39.0%** | **0.0%** |
+| Word error rate | 0.220 | 0.091 |
+| Critical semantic error rate | 0.303 | 0.073 |
+| **Silent meaning flips** | **35.9%** | **0.0%** |
 
-Caught 100% of the baseline's meaning flips, and blocked **none** of the
-controls. One control was marked up unnecessarily: a cleanup step rewrote
-`three` as `3`, and the guard reverted it, because Readback cannot yet tell
-number *normalisation* from number *substitution*.
+Caught 100% of the baseline's meaning flips. On the 26 controls: **nothing held,
+nothing highlighted.** Zero noise.
 
 ```bash
 cargo run --bin readback-bench -- run
@@ -286,8 +284,10 @@ Details, weights and the dataset format: [docs/benchmark.md](docs/benchmark.md).
 - Recovering a word that was **never transcribed at all** needs the audio. Pass
   voice-activity regions alongside word timings and Readback will flag the gap,
   but it is probabilistic and will fire in a noisy room.
-- It cannot tell number **normalisation** from number **substitution**, so a
-  cleanup step rewriting `three` as `3` is currently reverted.
+- Numbers are compared by value, so `three` → `3`, `1000` → `1,000` and
+  `20 percent` → `20%` pass untouched while `fifteen` → `fifty` and `$50` → `50`
+  are still caught. Longer compounds (`twenty five`) are not reduced, and fall
+  back to token-by-token comparison.
 - **Flag fatigue is the real risk.** If more than about 5% of messages get held,
   people will rip it out. Calibrate for rare, precise flags. The benchmark in
   v0.3 exists to prove the tradeoff rather than assert it.
@@ -308,15 +308,14 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.5.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.6.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
 What is not done, and is worth knowing before adopting:
 
-- Number normalisation is still treated as substitution, so a cleanup step
-  rewriting `three` as `3` gets reverted.
 - The benchmark is text-level, so it cannot rank recognition engines.
+- Multi-word number compounds such as `twenty five` are not reduced to a value.
 - There is no Python or Swift binding yet, and no local decision-model scorer.
 
 ## License

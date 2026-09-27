@@ -11,6 +11,7 @@
 
 use readback_core::align::{EditKind, align};
 use readback_core::lexicon::{Lexicon, SemanticClass};
+use readback_core::number;
 use readback_core::tokenize::{Token, tokenize};
 use serde::{Deserialize, Serialize};
 
@@ -223,6 +224,19 @@ pub fn score(reference: &str, hypothesis: &str, lexicon: &Lexicon) -> Scores {
                 edit_count += edit.left.len().max(edit.right.len());
                 let left: Vec<&Token> = reference_content[edit.left.clone()].iter().collect();
                 let right: Vec<&Token> = hypothesis_content[edit.right.clone()].iter().collect();
+
+                // Writing "three" as "3" is a word error but not a semantic
+                // one. WER still counts it above, which is exactly the contrast
+                // this metric exists to draw.
+                let renumbered = number::same_phrase(&left, &right)
+                    || (left.len() == right.len()
+                        && left
+                            .iter()
+                            .zip(right.iter())
+                            .all(|(a, b)| number::same_value(a, b)));
+                if renumbered {
+                    continue;
+                }
                 // A substitution costs whichever side carries more meaning: a
                 // negation replaced by an ordinary word is still a negation error.
                 let class = left
@@ -324,6 +338,34 @@ mod tests {
         assert!(!s.meaning_flip);
         assert_eq!(s.errors[0].class, ErrorClass::Number);
         assert!(s.cser > 0.2);
+    }
+
+    #[test]
+    fn renumbering_costs_nothing_semantically() {
+        let s = score(
+            "the meeting got moved to three",
+            "The meeting got moved to 3.",
+            &lex(),
+        );
+        assert_eq!(s.cser, 0.0, "the value did not change");
+        assert!(
+            s.wer > 0.0,
+            "WER still counts it, which is the point of the contrast"
+        );
+        assert!(!s.meaning_flip);
+    }
+
+    #[test]
+    fn renumbering_does_not_hide_a_real_change() {
+        let s = score("set retries to fifteen", "set retries to 50", &lex());
+        assert!(s.cser > 0.0);
+        assert_eq!(s.errors[0].class, ErrorClass::Number);
+    }
+
+    #[test]
+    fn dropping_a_currency_symbol_still_counts() {
+        let s = score("refund $50 today", "refund 50 today", &lex());
+        assert!(s.cser > 0.0, "$50 and 50 are not the same amount");
     }
 
     #[test]

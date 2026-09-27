@@ -48,6 +48,25 @@ fn is_word_char(c: char) -> bool {
     c.is_alphanumeric()
 }
 
+/// A comma inside a number, as in `1,000`.
+///
+/// Only between two digits, so `hello, world` is still two tokens. The check
+/// looks backwards at the text consumed so far and forwards at what follows.
+fn is_digit_separator(c: char, text: &str, idx: usize, end: usize) -> bool {
+    if c != ',' {
+        return false;
+    }
+    let prev_is_digit = text[..end]
+        .chars()
+        .next_back()
+        .is_some_and(|p| p.is_ascii_digit());
+    let next_is_digit = text[idx + c.len_utf8()..]
+        .chars()
+        .next()
+        .is_some_and(|n| n.is_ascii_digit());
+    prev_is_digit && next_is_digit
+}
+
 /// Characters that may *start* a word when a word character follows, so that
 /// `.env`, `$50`, `#channel` and `@handle` survive as single tokens.
 fn is_leading(c: char) -> bool {
@@ -112,7 +131,7 @@ pub fn tokenize(text: &str) -> Vec<Token> {
                 chars.next();
                 continue;
             }
-            if is_inner(ch) {
+            if is_inner(ch) || is_digit_separator(ch, text, idx, end) {
                 let after = idx + ch.len_utf8();
                 let next_is_word = text[after..].chars().next().is_some_and(is_word_char);
                 if next_is_word {
@@ -122,6 +141,19 @@ pub fn tokenize(text: &str) -> Vec<Token> {
                 }
             }
             break;
+        }
+
+        // A percent sign belongs to the number in front of it: `20%` is not the
+        // same quantity as `20`.
+        if let Some(&(idx, ch)) = chars.peek()
+            && ch == '%'
+            && text[..end]
+                .chars()
+                .next_back()
+                .is_some_and(|p| p.is_ascii_digit())
+        {
+            end = idx + ch.len_utf8();
+            chars.next();
         }
 
         debug_assert!(end <= bytes_len);
@@ -181,6 +213,36 @@ mod tests {
         assert!(norms.contains(&"max_retries"));
         assert!(norms.contains(&".env"));
         assert_eq!(t.last().unwrap().kind, TokenKind::Number);
+    }
+
+    #[test]
+    fn a_percent_sign_belongs_to_its_number() {
+        let t = tokenize("scale to 20% today");
+        assert_eq!(t[2].norm, "20%");
+        assert_eq!(t[2].kind, TokenKind::Number);
+    }
+
+    #[test]
+    fn a_stray_percent_sign_is_punctuation() {
+        let t = tokenize("100 % sure");
+        assert!(
+            t.iter()
+                .any(|token| token.kind == TokenKind::Punct && token.norm == "%")
+        );
+    }
+
+    #[test]
+    fn digit_separators_stay_inside_the_number() {
+        let t = tokenize("send 1,000 of them");
+        assert_eq!(t[1].norm, "1,000");
+        assert_eq!(t[1].kind, TokenKind::Number);
+    }
+
+    #[test]
+    fn a_comma_between_words_still_splits() {
+        let t = tokenize("hello, world");
+        assert_eq!(t.len(), 3);
+        assert_eq!(t[1].kind, TokenKind::Punct);
     }
 
     #[test]

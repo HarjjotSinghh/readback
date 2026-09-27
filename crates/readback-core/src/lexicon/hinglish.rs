@@ -22,6 +22,9 @@ pub const DIRECTION: &[&str] = &[
 pub const QUANTIFIER: &[&str] = &[
     "sab", "sabhi", "sirf", "bas", "poora", "pura", "aadha", "adha", "dono", "har", "thoda",
     "zyada", "kam",
+    // Negative only in combination ("koi nahi", "kabhi nahi"), so they are
+    // protected as quantifiers rather than mislabelled as negations.
+    "koi", "kuch", "kuchh", "kabhi", "bilkul",
 ];
 
 pub const MODALITY: &[&str] = &[
@@ -29,7 +32,12 @@ pub const MODALITY: &[&str] = &[
     "padegi", "hoga", "hogi", "zarur", "zaroor",
 ];
 
+/// Romanised Hindi numerals.
+///
+/// `do`, `teen`, `char` and `bees` are deliberately absent: they are ordinary
+/// English words, and reading "do merge this" as "2 merge this" is worse than
+/// missing a numeral.
 pub const NUMBER_WORDS: &[&str] = &[
-    "ek", "do", "teen", "char", "paanch", "panch", "chhe", "che", "saat", "aath", "nau", "das",
-    "gyarah", "barah", "bees", "pachas", "sau", "hazaar", "hazar", "lakh", "crore", "karod",
+    "ek", "paanch", "panch", "chhe", "che", "saat", "aath", "nau", "das", "gyarah", "barah",
+    "pachas", "sau", "hazaar", "hazar", "lakh", "crore", "karod",
 ];

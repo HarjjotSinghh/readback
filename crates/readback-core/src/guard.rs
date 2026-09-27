@@ -39,11 +39,25 @@ struct PendingFlag {
     replacement: Option<String>,
 }
 
-/// Counts protected tokens by normalised form.
+/// The identity a protected token is tracked by.
+///
+/// Numbers are keyed by canonical value, so a cleanup step rewriting `three` as
+/// `3` is not mistaken for one rewriting `fifteen` as `fifty`. Everything else
+/// is keyed by its normalised spelling.
+fn loss_key(token: &Token, lex: &Lexicon) -> String {
+    if lex.classify(token) == Some(SemanticClass::Number)
+        && let Some(canonical) = crate::number::canonical(token)
+    {
+        return canonical;
+    }
+    token.norm.clone()
+}
+
+/// Counts protected tokens by the identity they are tracked under.
 fn protected_counts(tokens: &[Token], lex: &Lexicon) -> HashMap<String, usize> {
     let mut counts = HashMap::new();
     for token in tokens.iter().filter(|t| lex.is_protected(t)) {
-        *counts.entry(token.norm.clone()).or_insert(0) += 1;
+        *counts.entry(loss_key(token, lex)).or_insert(0) += 1;
     }
     counts
 }
@@ -64,7 +78,7 @@ fn lost_in_range(
         let Some(class) = lex.classify(token) else {
             continue;
         };
-        let Some(remaining) = budget.get_mut(&token.norm) else {
+        let Some(remaining) = budget.get_mut(&loss_key(token, lex)) else {
             continue;
         };
         if *remaining == 0 {
@@ -74,6 +88,11 @@ fn lost_in_range(
         lost.push((range.start + offset, class));
     }
     lost
+}
+
+/// Drops punctuation, which the polish step tends to pull into an edit.
+fn content_tokens(tokens: &[Token]) -> Vec<&Token> {
+    tokens.iter().filter(|t| !t.is_punct()).collect()
 }
 
 fn push_tokens(out: &mut Vec<Emitted>, tokens: &[Token]) {
@@ -173,6 +192,19 @@ pub fn check_cleanup(raw_text: &str, cleaned_text: &str, lex: &Lexicon) -> Guard
         match kind {
             EditKind::Equal | EditKind::Insert => push_tokens(&mut out, &cleaned[right]),
             EditKind::Delete | EditKind::Replace => {
+                // `20 percent` becoming `20%` is a re-spelling, not a change.
+                // Punctuation is dropped first, since the polish step tends to
+                // pull a full stop into the same edit.
+                let renumbered = kind == EditKind::Replace
+                    && crate::number::same_phrase(
+                        &content_tokens(&raw[left.clone()]),
+                        &content_tokens(&cleaned[right.clone()]),
+                    );
+                if renumbered {
+                    push_tokens(&mut out, &cleaned[right]);
+                    continue;
+                }
+
                 let lost = lost_in_range(&raw, &left, lex, &mut budget);
                 if lost.is_empty() {
                     push_tokens(&mut out, &cleaned[right]);
@@ -339,6 +371,47 @@ mod tests {
         assert!(out.reverted);
         assert!(out.text.contains("15"));
         assert_eq!(out.flags[0].kind, FlagKind::ChangedNumber);
+    }
+
+    #[test]
+    fn rewriting_a_number_is_not_changing_it() {
+        let lex = Lexicon::default();
+        for (raw, cleaned) in [
+            (
+                "the meeting got moved to three",
+                "The meeting got moved to 3.",
+            ),
+            ("send 1000 of them", "Send 1,000 of them."),
+            ("set retries to fifteen", "Set retries to 15."),
+        ] {
+            let out = check_cleanup(raw, cleaned, &lex);
+            assert!(
+                !out.reverted,
+                "{raw:?} -> {cleaned:?} was reverted to {:?}",
+                out.text
+            );
+        }
+    }
+
+    #[test]
+    fn a_spelled_unit_becoming_a_symbol_is_not_a_change() {
+        let lex = Lexicon::default();
+        let out = check_cleanup("scale it to 20 percent", "Scale it to 20%.", &lex);
+        assert!(!out.reverted, "text was: {}", out.text);
+    }
+
+    #[test]
+    fn changing_a_number_is_still_caught() {
+        let lex = Lexicon::default();
+        for (raw, cleaned) in [
+            ("set retries to fifteen", "Set retries to 50."),
+            ("refund $50", "Refund 50."),
+            ("scale to 20%", "Scale to 20."),
+        ] {
+            let out = check_cleanup(raw, cleaned, &lex);
+            assert!(out.reverted, "{raw:?} -> {cleaned:?} slipped through");
+            assert_eq!(out.flags[0].kind, FlagKind::ChangedNumber);
+        }
     }
 
     #[test]

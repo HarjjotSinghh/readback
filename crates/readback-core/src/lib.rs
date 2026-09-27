@@ -54,6 +54,7 @@ pub mod engine;
 pub mod error;
 pub mod guard;
 pub mod lexicon;
+pub mod number;
 pub mod omission;
 pub mod policy;
 pub mod scorer;

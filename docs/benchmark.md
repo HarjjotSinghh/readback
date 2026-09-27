@@ -69,7 +69,7 @@ line:
 | `vocabulary` | Terms the user would have in their dictionary. Optional.         |
 | `benign`     | A control: the stack behaved, so a good layer stays quiet.       |
 
-v0 has 59 cases across 15 categories, 22 of them controls.
+v0 has 64 cases across 15 categories, 26 of them controls.
 
 ### An important limitation
 
@@ -82,7 +82,7 @@ Audio fixtures are the obvious next step, and would make the numbers comparable
 across engines. Until then, read the results as a response profile rather than
 an engine leaderboard.
 
-The verdict mix is also not representative of real traffic: 37 of 59 cases are
+The verdict mix is also not representative of real traffic: 38 of 64 cases are
 deliberately dangerous, so the hold rate here is far above what anyone would
 see while actually dictating.
 
@@ -93,18 +93,18 @@ cargo run --bin readback-bench -- run
 ```
 
 ```
-  CriticalSpeechBench — 59 cases, 22 controls
+  CriticalSpeechBench — 64 cases, 26 controls
 
                                  baseline   readback
   --------------------------------------------------
-  word error rate                   0.220      0.080
-  critical semantic error rate      0.328      0.080
-  silent meaning flips              39.0%       0.0%
+  word error rate                   0.220      0.091
+  critical semantic error rate      0.303      0.073
+  silent meaning flips              35.9%       0.0%
 
   caught                           100.0%   caught or repaired, of the baseline's flips
   false hold rate                    0.0%   controls blocked
-  false highlight rate               4.5%   controls marked up
-  pass / highlight / hold           37.3% / 28.8% / 33.9%
+  false highlight rate               0.0%   controls marked up
+  pass / highlight / hold           42.2% / 26.6% / 31.2%
 ```
 
 | Flag           | Meaning                                                    |
@@ -137,18 +137,26 @@ hide the interesting parts:
   what gets a tool like this uninstalled, so this list matters as much as the
   first one.
 
-In the current run, the only noise is `ben-016`:
+In the current run both lists are empty: nothing was missed, and no control was
+touched.
 
-```
-    ben-016    highlight  The meeting got moved to three.
-```
+That was not true before 0.6.0. `ben-016` used to be highlighted, because the
+cleanup step rewrote `three` as `3` and the guard treated it as a protected
+number edit. Numbers are now compared **by value**, so re-spellings pass while
+real changes are still caught:
 
-The cleanup step rewrote `three` as `3`, the Cleanup Guard treated that as a
-protected-number edit, and reverted it. The meaning survived either way, so the
-revert was unnecessary. This is a known, genuine weakness: **Readback cannot
-currently distinguish number normalisation from number substitution.** Teaching
-the guard that `three` and `3` are the same value is tracked for a later
-version.
+| Rewrite | Verdict |
+| --- | --- |
+| `three` → `3` | passes |
+| `1000` → `1,000` | passes |
+| `20 percent` → `20%` | passes |
+| `fifteen` → `fifty` | caught |
+| `$50` → `50` | caught — dropping a currency is a change |
+| `20%` → `20` | caught |
+
+Note what CSER does with a pure re-spelling: it scores **zero**, while WER still
+counts it as a word error. That contrast is the entire argument for the metric,
+and the `normalisation` category exists to keep it honest.
 
 ## Adding cases
 

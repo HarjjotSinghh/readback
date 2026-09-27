@@ -7,6 +7,63 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-27
+
+Numbers are compared by value, not by spelling. This removes the last piece of
+noise the benchmark was reporting on its controls.
+
+### Added
+
+- **`readback_core::number`**: canonical keys for numeric tokens. `canonical`
+  reduces a token to a `kind:value` key, and `canonical_phrase` handles a number
+  followed by a spelled-out unit. The kind is part of the key, because dropping
+  a currency symbol is itself a change.
+- Four new controls and one new danger case in CriticalSpeechBench covering
+  renumbering, bringing the dataset to 64 cases with 26 controls.
+
+### Changed
+
+- **The Cleanup Guard compares numbers by value.** `three` → `3`,
+  `1000` → `1,000` and `20 percent` → `20%` now pass untouched, while
+  `fifteen` → `fifty`, `$50` → `50` and `20%` → `20` are still caught.
+- **CSER scores a pure re-spelling as zero**, while word error rate still counts
+  it as an error. That contrast is the argument for the metric, and the
+  `normalisation` category now exists to keep it honest.
+- The tokeniser keeps `1,000` and `20%` whole. A comma is only absorbed between
+  two digits, so `hello, world` still splits.
+
+### Fixed
+
+- **Romanised Hindi numerals that are ordinary English words are no longer
+  treated as numbers.** `do`, `teen`, `char` and `bees` were in the Hinglish
+  number list, so with that locale loaded "do merge this" read as "2 merge
+  this". Reading an instruction as a quantity is worse than missing a numeral.
+- `koi`, `kuch`, `kabhi` and `bilkul` moved from the Hinglish negation list to
+  the quantifier list. They are only negative in combination (`koi nahi`,
+  `kabhi nahi`), so labelling them negations overstated the stakes of any
+  sentence containing them. They are still protected, at a more accurate weight.
+
+### Results
+
+CriticalSpeechBench v0, 64 cases, 26 controls:
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.220 | 0.091 |
+| Critical semantic error rate | 0.303 | 0.073 |
+| Silent meaning flips | 35.9% | 0.0% |
+
+100% of the baseline's meaning flips caught. On the controls: **nothing held,
+nothing highlighted.**
+
+### Known limits
+
+- Multi-word compounds such as `twenty five` are not reduced to a value; they
+  fall back to token-by-token comparison, which is conservative rather than
+  wrong.
+- `quarter` is deliberately not treated as `0.25`, since "quarter past" is the
+  more common reading.
+
 ## [0.5.0] - 2026-09-27
 
 The reference app, and the last item on the 0.x roadmap.
@@ -198,7 +255,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.6.0
 [0.5.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.5.0
 [0.4.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.4.0
 [0.3.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.3.0
