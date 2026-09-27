@@ -99,6 +99,11 @@ enum Command {
         #[arg(long, conflicts_with = "json")]
         markdown: bool,
 
+        /// Sweep the highlight threshold and report the catch/noise trade-off.
+        #[arg(long)]
+        calibrate: bool,
+
+        /// List every clip, not just the failures.
         #[arg(long, short)]
         verbose: bool,
     },
@@ -213,6 +218,7 @@ fn main() -> Result<()> {
             config,
             json,
             markdown,
+            calibrate,
             verbose,
         } => {
             let mut cases: Vec<AudioCase> = audio::load_manifest(&manifest)?;
@@ -251,6 +257,7 @@ fn main() -> Result<()> {
                     serde_json::to_string_pretty(&serde_json::json!({
                         "summary": summary,
                         "coverage": coverage,
+                        "calibration": audio::calibrate(&results),
                         "categories": runner::by_category(&scored),
                         "clips": results,
                     }))?
@@ -265,7 +272,7 @@ fn main() -> Result<()> {
             } else {
                 print!(
                     "{}",
-                    report::render_audio(&results, &summary, coverage, verbose)
+                    report::render_audio(&results, &summary, coverage, calibrate, verbose)
                 );
             }
         }

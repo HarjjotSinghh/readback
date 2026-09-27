@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.8"
+readback-core = "0.9"
 ```
 
 ```rust
@@ -293,18 +293,31 @@ step:
 WER and CSER do not move, and should not: with no cleanup step there is nothing
 to repair, only to flag. Caught 55.6% of the engine's meaning flips.
 
-Two findings from that run matter more than the table:
+With **base.en** instead, and again with a cleanup step added to the loop:
+
+| | tiny.en | base.en | base.en + cleanup |
+|---|---:|---:|---:|
+| Meaning flips reaching the user | 6.2% | **3.1%** | **3.1%** |
+| Caught | 55.6% | 66.7% | **81.8%** |
+| Noise on correct transcripts | 50.0% | 39.1% | 39.0% |
+
+Three findings from those runs matter more than the tables:
 
 - **Readback is blind when the transcript is destroyed.** tiny.en turned
   `abhi mat bhejo` into `Obi Matbijo`, which passed silently — a mangled string
   has no protected tokens to anchor a flag to. The layer assumes mostly-correct
   text with one dangerous word wrong. When an engine has no purchase on the
   language at all, that assumption fails.
-- **Flag fatigue is the live risk.** Half the clips tiny.en transcribed
-  *correctly* were still marked up. Its per-word confidence is poor, and the
-  default thresholds were calibrated against the Cleanup Guard rather than raw
-  acoustic confidence. Thresholds want calibrating per engine; nothing does that
-  yet.
+- **Flag fatigue is the live risk, and a better model does not fix it.** Half
+  the clips tiny.en transcribed *correctly* were still marked up; base.en only
+  brought that to 39%.
+- **The acoustic-only signal is weakly discriminative.** `--calibrate` sweeps
+  the highlight threshold and reports the trade-off, and on these runs there is
+  no good cutoff: catching 83% of flips costs marking 46% of what the engine got
+  right. The tool says so rather than handing over a number that looks like a
+  fix. **A cleanup step to diff against is worth far more than a better
+  threshold** — it is the only configuration where Readback repairs rather than
+  merely flags.
 
 Every audio report ends with a coverage line stating what evidence your engine
 handed over, because one that returns a bare string gives Readback nothing to
@@ -345,7 +358,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.8.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.9.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
@@ -354,9 +367,10 @@ What is not done, and is worth knowing before adopting:
 - The bundled dataset is text-level. The audio harness lifts that limit, but
   the fixtures it generates are text-to-speech, which is far cleaner than real
   speech.
-- **Thresholds are not calibrated per engine.** A weak recogniser's poor
-  confidence scores make the acoustic stage fire constantly; see the tiny.en
-  run above.
+- **Without a cleanup step, the risk signal is weak.** Raw acoustic confidence
+  does not cleanly separate "changed the instruction" from "fine", and no
+  threshold fixes that; `readback-bench audio --calibrate` will show you the
+  trade-off for your own engine.
 - **A destroyed transcript defeats the layer entirely.** With no protected token
   left in the text, there is nothing to flag.
 - Multi-word number compounds such as `twenty five` are not reduced to a value.

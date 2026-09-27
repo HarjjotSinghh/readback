@@ -7,6 +7,50 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-27
+
+Threshold calibration, and the negative result it produced.
+
+### Added
+
+- **`readback-bench audio --calibrate`**: sweeps the highlight threshold across
+  a run and reports what each cutoff would have caught and how much noise it
+  would have cost. An action is a pure function of risk and the thresholds, so
+  the sweep is exact and needs no re-run.
+- `audio::calibrate` and `audio::best_threshold`, with a `CalibrationPoint` per
+  candidate cutoff. Also exposed in `--json` output.
+- **The report says when no threshold works.** If the best trade-off still marks
+  more than a quarter of the clips the engine got right, the sweep says so
+  plainly instead of handing over a number that looks like a fix.
+
+### Results — three runs
+
+| | tiny.en | base.en | base.en + cleanup |
+|---|---:|---:|---:|
+| Word error rate | 0.199 | 0.157 | 0.169 → 0.157 |
+| Critical semantic error rate | 0.147 | 0.105 | 0.132 → 0.108 |
+| Meaning flips reaching the user | 14.1% → 6.2% | 9.4% → 3.1% | 17.2% → 3.1% |
+| Caught | 55.6% | 66.7% | 81.8% |
+| Noise on correct transcripts | 50.0% | 39.1% | 39.0% |
+
+The cleanup column uses a stand-in that deletes negations, which is why the
+engine flip rate rises there: it is breaking transcripts the engine got right.
+
+### What these runs establish
+
+- **A better model helps and does not fix the noise.** tiny to base halved the
+  flips reaching the user and cut the hold rate from 10.9% to 6.2%, but noise on
+  correct transcripts only fell from 50% to 39%.
+- **A cleanup step is worth more than a better threshold.** It is the only
+  configuration where WER and CSER *improve* — with something to diff against,
+  Readback repairs rather than merely flags, and catching rises to 81.8% even
+  while the cleanup is itself introducing errors.
+- **The acoustic-only signal is weakly discriminative.** On these runs no
+  highlight cutoff separates the two populations: catching 83% of flips costs
+  marking 46% of what the engine got right, and pushing noise under 10% drops
+  catching to 17%. This is a negative result about the current design, recorded
+  rather than tuned away.
+
 ## [0.8.0] - 2026-09-27
 
 The first measured run against a real recogniser, and two fixes the run
@@ -356,7 +400,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.9.0
 [0.8.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.8.0
 [0.7.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.7.0
 [0.6.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.6.0

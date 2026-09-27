@@ -341,6 +341,75 @@ pub fn coverage(results: &[AudioResult], had_cleanup: bool) -> Coverage {
     }
 }
 
+/// One candidate highlight threshold, and what it would have done.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationPoint {
+    /// Risk at or above this would be marked.
+    pub highlight: f32,
+    /// Of the engine's meaning flips, the share this threshold would mark.
+    pub caught: f32,
+    /// Of the clips the engine got right, the share this threshold would mark.
+    pub noise: f32,
+    pub marked: usize,
+}
+
+impl CalibrationPoint {
+    /// How much catching is bought per unit of noise. Used to pick the knee.
+    fn value(&self) -> f32 {
+        self.caught - self.noise
+    }
+}
+
+/// Sweeps the highlight threshold over a run and reports the trade-off.
+///
+/// The default thresholds were calibrated against the Cleanup Guard, whose
+/// evidence is a concrete reverted span. Raw acoustic confidence from a weak
+/// recogniser is a much noisier signal, and wants a different threshold. This
+/// gives a run the numbers to choose one rather than guess.
+///
+/// Recomputing from risk is exact: an action is a pure function of risk and the
+/// thresholds, so no re-run is needed.
+pub fn calibrate(results: &[AudioResult]) -> Vec<CalibrationPoint> {
+    let flips: Vec<&AudioResult> = results
+        .iter()
+        .filter(|r| r.case.baseline.meaning_flip)
+        .collect();
+    let correct: Vec<&AudioResult> = results.iter().filter(|r| r.engine_was_correct()).collect();
+
+    (1..=19)
+        .map(|step| {
+            let highlight = step as f32 * 0.05;
+            let marked =
+                |set: &[&AudioResult]| set.iter().filter(|r| r.case.risk >= highlight).count();
+            let rate = |hits: usize, total: usize| {
+                if total == 0 {
+                    0.0
+                } else {
+                    hits as f32 / total as f32
+                }
+            };
+            CalibrationPoint {
+                highlight,
+                caught: rate(marked(&flips), flips.len()),
+                noise: rate(marked(&correct), correct.len()),
+                marked: results.iter().filter(|r| r.case.risk >= highlight).count(),
+            }
+        })
+        .collect()
+}
+
+/// The threshold with the best catch-to-noise trade-off, preferring the higher
+/// threshold when two are equally good, since a quieter tool survives longer.
+pub fn best_threshold(points: &[CalibrationPoint]) -> Option<CalibrationPoint> {
+    points.iter().copied().reduce(|best, point| {
+        if point.value() >= best.value() {
+            point
+        } else {
+            best
+        }
+    })
+}
+
 /// Cases where the engine itself changed the instruction, which is what an
 /// audio run measures that a text run cannot.
 pub fn engine_flips(results: &[AudioResult]) -> Vec<&AudioResult> {
@@ -380,6 +449,71 @@ mod tests {
     fn a_cleanup_command_must_name_the_text() {
         assert!(CleanupCommand::new("llm polish").is_err());
         assert!(CleanupCommand::new("llm polish {text}").is_ok());
+    }
+
+    fn result_at(risk: f32, flip: bool, correct: bool) -> AudioResult {
+        use crate::metric::Scores;
+        use readback_core::Action;
+        let scores = |cser: f32, flip: bool| Scores {
+            wer: 0.0,
+            cser,
+            meaning_flip: flip,
+            errors: Vec::new(),
+        };
+        AudioResult {
+            case: CaseResult {
+                id: "x".into(),
+                category: "c".into(),
+                benign: false,
+                baseline_text: String::new(),
+                baseline: scores(if correct { 0.0 } else { 0.5 }, flip),
+                readback_text: String::new(),
+                readback: scores(0.0, false),
+                action: Action::Pass,
+                risk,
+                stakes: 0.0,
+            },
+            reference: String::new(),
+            heard: String::new(),
+            engine: "stub".into(),
+            speech_regions: 0,
+            clip_ms: 0,
+            had_confidence: true,
+            had_timings: true,
+        }
+    }
+
+    #[test]
+    fn calibration_separates_catching_from_noise() {
+        // Two flips at high risk, two clean clips at low risk: a threshold
+        // between them catches everything and costs nothing.
+        let results = [
+            result_at(0.80, true, false),
+            result_at(0.75, true, false),
+            result_at(0.20, false, true),
+            result_at(0.15, false, true),
+        ];
+        let best = best_threshold(&calibrate(&results)).unwrap();
+        assert_eq!(best.caught, 1.0);
+        assert_eq!(best.noise, 0.0);
+        assert!(best.highlight > 0.20 && best.highlight <= 0.75, "{best:?}");
+    }
+
+    #[test]
+    fn a_threshold_of_zero_marks_everything() {
+        let results = [result_at(0.5, true, false), result_at(0.1, false, true)];
+        let points = calibrate(&results);
+        let lowest = points.first().unwrap();
+        assert_eq!(lowest.marked, 2);
+        assert_eq!(lowest.noise, 1.0);
+    }
+
+    #[test]
+    fn calibration_copes_with_no_flips_at_all() {
+        let results = [result_at(0.1, false, true)];
+        let best = best_threshold(&calibrate(&results)).unwrap();
+        assert_eq!(best.caught, 0.0);
+        assert_eq!(best.noise, 0.0, "a high threshold should mark nothing");
     }
 
     #[test]

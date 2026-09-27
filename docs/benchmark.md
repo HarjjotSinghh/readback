@@ -338,17 +338,79 @@ So the audio report also computes **noise on correct transcripts**: of the clips
 the engine got right, how many Readback marked anyway. That is the number that
 predicts flag fatigue, and it is the one to watch.
 
+### Three runs compared
+
+`tiny.en` and `base.en`, then `base.en` with a cleanup step added to the loop.
+The cleanup is a stand-in that deletes negations, which is why the engine flip
+rate rises in the third column — it is breaking transcripts the engine got right.
+
+| | tiny.en | base.en | base.en + cleanup |
+|---|---:|---:|---:|
+| Word error rate | 0.199 | 0.157 | 0.169 → **0.157** |
+| Critical semantic error rate | 0.147 | 0.105 | 0.132 → **0.108** |
+| Meaning flips reaching the user | 14.1% → 6.2% | 9.4% → **3.1%** | 17.2% → **3.1%** |
+| Caught | 55.6% | 66.7% | **81.8%** |
+| Noise on correct transcripts | 50.0% | 39.1% | 39.0% |
+
+Three things fall out of this.
+
+**A better model helps, and does not fix the noise.** Going from tiny to base
+halved the flips that reached the user and cut the hold rate from 10.9% to 6.2%,
+but noise on correct transcripts only fell from 50% to 39%. Model quality is not
+the lever for flag fatigue.
+
+**A cleanup step is worth more than a better threshold.** It is the only column
+where word error rate and CSER actually *improve* — with something to diff
+against, Readback repairs rather than merely flags, and catching jumps to 81.8%
+even though the cleanup itself was introducing errors.
+
+**The acoustic-only signal is weakly discriminative.** That is what the
+threshold sweep shows.
+
+### Calibrating thresholds
+
+```bash
+readback-bench audio --manifest fixtures/manifest.jsonl --vad --calibrate --asr '...'
+```
+
+The sweep recomputes what each highlight cutoff would have done. An action is a
+pure function of risk and the thresholds, so this is exact and needs no re-run.
+
+```
+  highlight    caught     noise   marked
+       0.30     83.3%     45.7%       36
+       0.35     66.7%     39.1%       32
+       0.50     33.3%     26.1%       20
+       0.65     16.7%      2.2%        4
+
+  best trade-off for this engine: highlight at 0.30 (83.3% caught, 45.7% noise)
+
+  but no threshold separates these two populations well: the best
+  trade-off still marks 45.7% of the clips this engine got right.
+```
+
+**Read that as a negative result, because it is one.** There is no good cutoff
+on this run. Catching 83% costs marking nearly half of what the engine got
+right; getting noise under 10% drops catching to 17%. The report says so rather
+than handing over a number that looks like a fix.
+
+What it means: with no cleanup step to diff against, risk is driven by raw
+acoustic confidence, and a whisper-family model's per-word confidence does not
+cleanly separate "changed the instruction" from "fine". The Cleanup Guard's
+evidence — a concrete reverted span — is far stronger, which is what the third
+column above demonstrates.
+
 ### Reproducing this
 
 ```bash
 brew install whisper-cpp
-curl -L -o ggml-tiny.en.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+curl -L -o ggml-base.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
 scripts/make-fixtures.sh
-```
 
-A larger model should shift these numbers substantially, and no result for one
-is published here yet.
+readback-bench audio --manifest fixtures/manifest.jsonl --vad --calibrate \
+  --asr 'whisper-cli -m ggml-base.en.bin -f {wav} --output-json-full -oj -of /tmp/rb && cat /tmp/rb.json'
+```
 
 ## Adding cases
 

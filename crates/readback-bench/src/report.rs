@@ -1,6 +1,6 @@
 //! Rendering a [`Report`](crate::runner::Report) for humans and for Markdown.
 
-use crate::audio::{AudioResult, Coverage};
+use crate::audio::{self, AudioResult, Coverage};
 use crate::runner::{CaseResult, Report, Summary};
 use readback_core::Action;
 
@@ -203,6 +203,7 @@ pub fn render_audio(
     results: &[AudioResult],
     summary: &Summary,
     coverage: Coverage,
+    calibrate: bool,
     verbose: bool,
 ) -> String {
     let engine = results
@@ -309,6 +310,51 @@ pub fn render_audio(
                 "    {:<10} got:  {}\n",
                 "", result.case.readback_text
             ));
+        }
+    }
+
+    if calibrate {
+        let points = audio::calibrate(results);
+        out.push_str("\n  threshold sweep — what a different highlight cutoff would do:\n");
+        out.push_str(&format!(
+            "  {:>9}  {:>8}  {:>8}  {:>7}\n",
+            "highlight", "caught", "noise", "marked"
+        ));
+        for point in points.iter().filter(|p| p.marked > 0) {
+            out.push_str(&format!(
+                "  {:>9.2}  {:>8}  {:>8}  {:>7}\n",
+                point.highlight,
+                pct(point.caught),
+                pct(point.noise),
+                point.marked
+            ));
+        }
+        if let Some(best) = audio::best_threshold(&points) {
+            out.push_str(&format!(
+                "\n  best trade-off for this engine: highlight at {:.2} \
+                 ({} caught, {} noise)\n",
+                best.highlight,
+                pct(best.caught),
+                pct(best.noise)
+            ));
+            out.push_str(
+                "  the shipped default is 0.35, calibrated against the Cleanup Guard\n  \
+                 rather than raw acoustic confidence.\n",
+            );
+
+            // A sweep is only worth acting on if some threshold actually
+            // separates the two populations. Often none does, and saying so is
+            // more useful than handing over a number that looks like a fix.
+            if best.noise > 0.25 {
+                out.push_str(&format!(
+                    "\n  but no threshold separates these two populations well: the best\n  \
+                     trade-off still marks {} of the clips this engine got right. On this\n  \
+                     run the risk signal is not discriminative, and tuning it will trade\n  \
+                     catching for quiet rather than buy both. A cleanup step to diff\n  \
+                     against is worth far more here than a better threshold.\n",
+                    pct(best.noise)
+                ));
+            }
         }
     }
 
