@@ -103,6 +103,34 @@ Adapters ship for `faster_whisper`, `whisper_cpp`, `parakeet` (NeMo) and a
 `generic` fallback. An engine that reports no confidence at all still works —
 Readback leans harder on the later stages.
 
+## Command line
+
+```bash
+cargo install readback-cli
+```
+
+```bash
+readback check --text "never merge a change like this" \
+               --cleaned-text "Merge a change like this."
+```
+
+```
+   HOLD   risk 0.94   stakes 0.90   suspicion 0.00
+
+  text     never Merge a change like this.
+  guard    ran, reverted a span
+
+  critical dropped_negation — "never"
+      cleanup dropped "never"; restored from the raw transcript
+```
+
+`check` exits 0 for pass, 1 for highlight and 2 for hold, so a shell script can
+branch on the verdict without parsing anything. `diff` shows what the Cleanup
+Guard changed, `explain` shows the arithmetic behind a verdict, and `lexicon`
+inspects the protected word lists.
+
+Full reference: [docs/cli.md](docs/cli.md).
+
 ## How it works
 
 Five stages, cheapest first. Each runs only when the evidence for it exists.
@@ -174,8 +202,8 @@ staging tables"* is not an embarrassing message. It's an incident.
 
 | Version | Contents                                                             |
 | ------- | -------------------------------------------------------------------- |
-| v0.1    | Core crate: adapters, Cleanup Guard, suspicion, rules scorer, policy  |
-| v0.2    | `readback` CLI — `check`, `diff`, `explain`                            |
+| v0.1 ✅ | Core crate: adapters, Cleanup Guard, suspicion, rules scorer, policy  |
+| v0.2 ✅ | `readback` CLI — `check`, `diff`, `explain`, `lexicon`                 |
 | v0.3    | CSER metric and CriticalSpeechBench, plus VAD-gap omission detection  |
 | v0.4    | Node binding via napi-rs, published as `@readback/core`               |
 | v0.5    | Reference Tauri menu-bar app demonstrating the overlay UX             |
@@ -186,8 +214,8 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.1.0. The core pipeline is implemented and tested; the API may still move
-before v1.0.
+v0.2.0. The core pipeline and the CLI are implemented and tested; the API may
+still move before v1.0.
 
 ## License
 

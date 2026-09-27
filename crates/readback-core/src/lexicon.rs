@@ -184,6 +184,42 @@ impl Lexicon {
         None
     }
 
+    /// Classifies a bare word, for callers that have no [`Token`] in hand.
+    ///
+    /// The word is tokenised first, so `"$50"` and `"don\u{2019}t"` behave the same
+    /// as they would mid-sentence. Returns `None` for input that tokenises to
+    /// nothing.
+    pub fn classify_str(&self, word: &str) -> Option<SemanticClass> {
+        let tokens = crate::tokenize::tokenize(word);
+        tokens.first().and_then(|t| self.classify(t))
+    }
+
+    /// Every word currently loaded for a class, sorted, for inspection and
+    /// documentation. `Number` returns only the spelled-out words, since
+    /// digits are recognised by shape rather than by list.
+    pub fn words(&self, class: SemanticClass) -> Vec<&str> {
+        let set = match class {
+            SemanticClass::Negation => &self.negation,
+            SemanticClass::Temporal => &self.temporal,
+            SemanticClass::Direction => &self.direction,
+            SemanticClass::Quantifier => &self.quantifier,
+            SemanticClass::Modality => &self.modality,
+            SemanticClass::Environment => &self.environment,
+            SemanticClass::Number => &self.number_words,
+            SemanticClass::ProtectedTerm => &self.protected,
+        };
+        let mut words: Vec<&str> = set.iter().map(String::as_str).collect();
+        words.sort_unstable();
+        words
+    }
+
+    /// Words that raise the stakes without being protected themselves.
+    pub fn words_destructive(&self) -> Vec<&str> {
+        let mut words: Vec<&str> = self.destructive.iter().map(String::as_str).collect();
+        words.sort_unstable();
+        words
+    }
+
     /// True for listed negations and for any unlisted `n't` contraction.
     pub fn is_negation(&self, norm: &str) -> bool {
         self.negation.contains(norm) || norm.ends_with("n't")
@@ -254,6 +290,26 @@ mod tests {
         let mut lex = Lexicon::default();
         lex.protect(["Main"]);
         assert_eq!(class_of(&lex, "main"), Some(SemanticClass::ProtectedTerm));
+    }
+
+    #[test]
+    fn classify_str_matches_classify() {
+        let lex = Lexicon::default();
+        assert_eq!(lex.classify_str("never"), Some(SemanticClass::Negation));
+        assert_eq!(lex.classify_str("$50"), Some(SemanticClass::Number));
+        assert_eq!(lex.classify_str("   "), None);
+    }
+
+    #[test]
+    fn words_lists_the_loaded_pack() {
+        let lex = Lexicon::new(&[Locale::En, Locale::Hinglish]);
+        let negations = lex.words(SemanticClass::Negation);
+        assert!(negations.contains(&"never"));
+        assert!(negations.contains(&"nahi"));
+        assert!(
+            negations.windows(2).all(|w| w[0] <= w[1]),
+            "should be sorted"
+        );
     }
 
     #[test]

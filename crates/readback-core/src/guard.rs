@@ -183,7 +183,20 @@ pub fn check_cleanup(raw_text: &str, cleaned_text: &str, lex: &Lexicon) -> Guard
                 // than splicing single words keeps the sentence grammatical.
                 let start = out.len();
                 push_tokens(&mut out, &raw[left.clone()]);
+                let flagged_end = out.len();
                 reverted = true;
+
+                // Trailing punctuation belongs to the polish, not to the
+                // meaning, so it survives the revert. Without this, reverting
+                // the last span of a sentence eats its full stop.
+                let kept_punct = cleaned[right.clone()]
+                    .iter()
+                    .rev()
+                    .take_while(|t| t.is_punct())
+                    .count();
+                if kept_punct > 0 {
+                    push_tokens(&mut out, &cleaned[right.end - kept_punct..right.end]);
+                }
 
                 let class = lost
                     .iter()
@@ -196,12 +209,13 @@ pub fn check_cleanup(raw_text: &str, cleaned_text: &str, lex: &Lexicon) -> Guard
                     .expect("lost is non-empty");
                 let lost_words: Vec<String> =
                     lost.iter().map(|(i, _)| raw[*i].text.clone()).collect();
-                let replacement = (kind == EditKind::Replace && !right.is_empty()).then(|| {
-                    cleaned[right.clone()]
-                        .iter()
-                        .map(|t| t.text.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" ")
+                // Quote the rewrite exactly as it was written, minus the
+                // trailing punctuation that was kept rather than replaced.
+                let quoted = right.start..right.end - kept_punct;
+                let replacement = (kind == EditKind::Replace && !quoted.is_empty()).then(|| {
+                    let from = cleaned[quoted.start].start;
+                    let to = cleaned[quoted.end - 1].end;
+                    cleaned_text[from..to].trim().to_string()
                 });
                 let substituted = kind == EditKind::Replace
                     && cleaned[right.clone()]
@@ -211,7 +225,7 @@ pub fn check_cleanup(raw_text: &str, cleaned_text: &str, lex: &Lexicon) -> Guard
                 pending.push(PendingFlag {
                     class,
                     substituted,
-                    out_range: start..out.len(),
+                    out_range: start..flagged_end,
                     lost: lost_words,
                     replacement,
                 });
@@ -333,6 +347,25 @@ mod tests {
         let out = check_cleanup("deploy this to staging", "Deploy this to production.", &lex);
         assert!(out.reverted);
         assert_eq!(out.flags[0].kind, FlagKind::ChangedEnvironment);
+    }
+
+    #[test]
+    fn reverting_the_last_span_keeps_the_full_stop() {
+        let lex = Lexicon::default();
+        let out = check_cleanup("deploy this to staging", "Deploy this to production.", &lex);
+        assert!(out.text.ends_with("staging."), "text was: {}", out.text);
+        assert_eq!(out.flags[0].span.slice(&out.text), "staging");
+    }
+
+    #[test]
+    fn evidence_quotes_the_rewrite_as_written() {
+        let lex = Lexicon::default();
+        let out = check_cleanup("deploy this to staging", "Deploy this to production.", &lex);
+        assert!(
+            out.flags[0].evidence.contains("\"production\""),
+            "{}",
+            out.flags[0].evidence
+        );
     }
 
     #[test]
