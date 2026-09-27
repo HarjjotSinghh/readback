@@ -256,9 +256,99 @@ this before Friday` really was broken, so holding it is correct, and the
 voice-activity detection found speech in 62 of 64 clips; the two misses are the
 shortest utterances.
 
-**No real engine numbers are published here.** Nothing in this repository has
-been run against Whisper or Parakeet. The harness exists so that you can, and
-the report will say plainly what evidence your engine handed over.
+### A real engine: whisper.cpp tiny.en
+
+The first measured run. `whisper.cpp` 1.9.4 with `ggml-tiny.en`, over the 64
+generated clips, no cleanup step:
+
+```bash
+readback-bench audio --manifest fixtures/manifest.jsonl --vad \
+  --label 'whisper.cpp tiny.en' \
+  --asr 'whisper-cli -m ggml-tiny.en.bin -f {wav} --output-json-full -oj -of /tmp/rb && cat /tmp/rb.json'
+```
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.199 | 0.199 |
+| Critical semantic error rate | 0.147 | 0.147 |
+| **Silent meaning flips** | **14.1%** | **6.2%** |
+
+```
+  engine meaning flips              14.1%   the engine changed the instruction
+  caught                            55.6%   caught or repaired, of the baseline's flips
+  pass / highlight / hold           45.3% / 43.8% / 10.9%
+  noise on correct transcripts      50.0%   of the 42 clips the engine got right
+  evidence supplied             64/64 confidence   64/64 timings   62/64 vad   0/64 cleanup
+```
+
+**Read WER and CSER as unchanged on purpose.** There is no cleanup step in this
+run, so Readback has nothing to repair — it can only flag. The number that moves
+is the one that matters: how often a changed instruction reached the user with
+no warning, which more than halved.
+
+What tiny.en actually did to these sentences:
+
+```
+    env-001    said:   deploy this to staging
+               heard:  to staging.              ← the verb vanished
+    env-003    said:   point it at localhost
+               heard:  pointed at localfist.
+    dir-004    said:   revert the change
+               heard:  Reverse the change.      ← direction verb flipped
+    hin-001    said:   abhi mat bhejo
+               heard:  Obi Matbijo              ← passed silently
+```
+
+### The two findings worth more than the table
+
+**Readback is blind when the transcript is destroyed.** The Hinglish clips came
+back as `Obi Matbijo` and `Yinahi Karna Hai` and **passed silently**, because a
+mangled string contains no protected tokens at all — no negation, no
+environment, no number — so stakes score near zero and there is nothing to
+anchor a flag to. Readback assumes the recogniser produces *mostly* correct
+text with a dangerous word wrong. When an engine has no purchase on the language
+at all, that assumption fails and the layer has nothing to say. This is a real
+limit, not a tuning problem.
+
+**Flag fatigue is the live risk, and this run proves it.** Half of the clips
+tiny.en transcribed *correctly* were still marked up. The README's own threshold
+is that a tool holding more than about 5% of messages gets uninstalled; the hold
+rate here is 10.9%, and highlighting — which is cheap, an underline rather than
+a block — ran at 43.8%.
+
+Two things drive that. tiny.en is the weakest model available and its per-word
+confidence is correspondingly poor, so the acoustic suspicion stage fires
+constantly. And the default thresholds were calibrated against the Cleanup
+Guard, whose evidence is a concrete reverted span, not against raw acoustic
+confidence from a weak model. **Thresholds should be calibrated per engine**,
+and nothing in the project does that yet.
+
+### `benign` does not survive an audio run
+
+A methodology note that cost a wrong number before it was caught. The manifest's
+`benign` flag describes whether the *hand-written* error in the text dataset was
+harmless. It says nothing about whether the engine erred on the same sentence.
+
+Judged by `benign`, this run had a 46.2% false highlight rate. But 8 of those 13
+"controls" were clips tiny.en genuinely broke — `yeah lol sounds good to me`
+came back as `Yellow L sounds good to me`, and `ship it when CI passes` as
+`Ship at Wednesday eye passes`. Flagging those is correct behaviour, not noise.
+
+So the audio report also computes **noise on correct transcripts**: of the clips
+the engine got right, how many Readback marked anyway. That is the number that
+predicts flag fatigue, and it is the one to watch.
+
+### Reproducing this
+
+```bash
+brew install whisper-cpp
+curl -L -o ggml-tiny.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+scripts/make-fixtures.sh
+```
+
+A larger model should shift these numbers substantially, and no result for one
+is published here yet.
 
 ## Adding cases
 

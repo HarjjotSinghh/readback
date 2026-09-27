@@ -38,6 +38,16 @@ pub struct AudioCase {
     pub benign: bool,
 }
 
+/// Wraps a value in single quotes for `sh`, escaping any quote inside it.
+///
+/// Both substitutions go through this. A manifest is data — it can come from
+/// another machine, another team, or a generator — so a `wav` path of
+/// `a.wav; rm -rf ~` must end up as one argument rather than two commands. The
+/// same goes for transcript text, which is whatever an engine decided to emit.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
 /// An external command that turns a clip into a transcript.
 ///
 /// `{wav}` in the template is replaced with the clip path. Whatever the command
@@ -68,7 +78,9 @@ impl AsrCommand {
     }
 
     fn run(&self, wav: &Path) -> Result<String> {
-        let command = self.template.replace("{wav}", &wav.display().to_string());
+        let command = self
+            .template
+            .replace("{wav}", &shell_quote(&wav.display().to_string()));
         let output = Command::new("sh")
             .arg("-c")
             .arg(&command)
@@ -110,9 +122,7 @@ impl CleanupCommand {
     }
 
     fn run(&self, text: &str) -> Result<String> {
-        // Single-quote the transcript for the shell, escaping any quote in it.
-        let quoted = format!("'{}'", text.replace('\'', r"'\''"));
-        let command = self.template.replace("{text}", &quoted);
+        let command = self.template.replace("{text}", &shell_quote(text));
         let output = Command::new("sh").arg("-c").arg(&command).output()?;
         if !output.status.success() {
             bail!("cleanup command failed");
@@ -148,6 +158,8 @@ fn parse_transcript(payload: &str) -> Result<Transcript> {
 pub struct AudioResult {
     #[serde(flatten)]
     pub case: CaseResult,
+    /// What the speaker actually said.
+    pub reference: String,
     /// What the engine produced before any cleanup.
     pub heard: String,
     pub engine: String,
@@ -158,6 +170,25 @@ pub struct AudioResult {
     /// True when the engine reported word timings, without which voice-activity
     /// regions cannot be turned into omission evidence.
     pub had_timings: bool,
+}
+
+impl AudioResult {
+    /// True when the engine transcribed the clip without a semantic error.
+    ///
+    /// On an audio run this, not the manifest's `benign` flag, is what makes a
+    /// clip a control. `benign` describes whether the *hand-written* error in
+    /// the text dataset was harmless; it says nothing about whether the engine
+    /// erred on the same sentence. Judging noise by `benign` charges Readback
+    /// for flagging transcripts the engine genuinely broke.
+    pub fn engine_was_correct(&self) -> bool {
+        self.case.baseline.cser == 0.0
+    }
+
+    /// Readback marked up a clip the engine got right. This is the number that
+    /// actually predicts flag fatigue.
+    pub fn is_noise(&self) -> bool {
+        self.engine_was_correct() && self.case.action != Action::Pass
+    }
 }
 
 /// Runs one clip end to end.
@@ -228,6 +259,7 @@ pub fn run_case(
             risk: verdict.risk,
             stakes: verdict.stakes,
         },
+        reference: case.reference.clone(),
         heard,
         engine: asr.label.clone(),
         speech_regions: speech.len(),
@@ -280,6 +312,10 @@ pub fn manifest_from_dataset(clip_dir: &Path) -> Result<Vec<AudioCase>> {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct Coverage {
     pub clips: usize,
+    /// Clips the engine transcribed without a semantic error.
+    pub engine_correct: usize,
+    /// Of those, how many Readback marked up anyway.
+    pub noise_on_correct: usize,
     pub with_confidence: usize,
     pub with_timings: usize,
     pub with_speech_regions: usize,
@@ -296,6 +332,8 @@ impl Coverage {
 pub fn coverage(results: &[AudioResult], had_cleanup: bool) -> Coverage {
     Coverage {
         clips: results.len(),
+        engine_correct: results.iter().filter(|r| r.engine_was_correct()).count(),
+        noise_on_correct: results.iter().filter(|r| r.is_noise()).count(),
         with_confidence: results.iter().filter(|r| r.had_confidence).count(),
         with_timings: results.iter().filter(|r| r.had_timings).count(),
         with_speech_regions: results.iter().filter(|r| r.speech_regions > 0).count(),
@@ -342,6 +380,46 @@ mod tests {
     fn a_cleanup_command_must_name_the_text() {
         assert!(CleanupCommand::new("llm polish").is_err());
         assert!(CleanupCommand::new("llm polish {text}").is_ok());
+    }
+
+    #[test]
+    fn shell_metacharacters_in_a_path_are_neutralised() {
+        // A manifest is data and may come from anywhere.
+        let quoted = shell_quote("clips/a.wav; rm -rf ~");
+        assert_eq!(quoted, "'clips/a.wav; rm -rf ~'");
+    }
+
+    /// Round-trips a value through a real shell, which is the only check that
+    /// proves the quoting rather than describing it.
+    fn echoed_by_sh(value: &str) -> String {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!("printf '%s' {}", shell_quote(value)))
+            .output()
+            .expect("sh should run");
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    #[test]
+    fn an_embedded_quote_cannot_break_out() {
+        for hostile in [
+            "it's",
+            "x'; touch /tmp/readback-pwned; echo '",
+            "$(touch /tmp/readback-pwned)",
+            "`touch /tmp/readback-pwned`",
+            "a.wav; rm -rf ~",
+            "a.wav && echo nope",
+        ] {
+            assert_eq!(
+                echoed_by_sh(hostile),
+                hostile,
+                "quoting failed for {hostile:?}"
+            );
+        }
+        assert!(
+            !std::path::Path::new("/tmp/readback-pwned").exists(),
+            "a test payload executed; the quoting is not holding"
+        );
     }
 
     #[test]

@@ -230,6 +230,16 @@ pub fn render_audio(
     ));
     out.push_str(&behaviour_table(summary));
 
+    if coverage.engine_correct > 0 {
+        let rate = coverage.noise_on_correct as f32 / coverage.engine_correct as f32;
+        out.push_str(&format!(
+            "  {:<28} {:>10}   of the {} clips the engine got right\n",
+            "noise on correct transcripts",
+            pct(rate),
+            coverage.engine_correct
+        ));
+    }
+
     out.push('\n');
     out.push_str(&format!(
         "  {:<28} {:>3}/{} confidence   {}/{} timings   {}/{} vad   {}/{} cleanup\n",
@@ -263,10 +273,16 @@ pub fn render_audio(
         ));
         for result in &flips {
             out.push_str(&format!(
-                "    {:<10} said:  {}\n",
-                result.case.id, result.case.readback_text
+                "    {:<10} said:   {}\n",
+                result.case.id, result.reference
             ));
-            out.push_str(&format!("    {:<10} heard: {}\n", "", result.heard));
+            out.push_str(&format!("    {:<10} heard:  {}\n", "", result.heard));
+            if result.case.readback_text != result.heard {
+                out.push_str(&format!(
+                    "    {:<10} became: {}\n",
+                    "", result.case.readback_text
+                ));
+            }
             out.push_str(&format!(
                 "    {:<10} {}\n",
                 "",
@@ -286,8 +302,12 @@ pub fn render_audio(
         ));
         for result in &silent {
             out.push_str(&format!(
-                "    {:<10} {}\n",
-                result.case.id, result.case.readback_text
+                "    {:<10} said: {}\n",
+                result.case.id, result.reference
+            ));
+            out.push_str(&format!(
+                "    {:<10} got:  {}\n",
+                "", result.case.readback_text
             ));
         }
     }

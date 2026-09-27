@@ -7,6 +7,66 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-27
+
+The first measured run against a real recogniser, and two fixes the run
+uncovered.
+
+### Security
+
+- **Command injection in the audio harness.** Clip paths from a manifest were
+  interpolated into the shell command unquoted, so a manifest entry of
+  `a.wav; rm -rf ~` would have executed. Both substitutions now go through
+  POSIX single-quoting. A manifest is data — it can come from another machine,
+  another team, or a generator — and is treated as such. Covered by a test that
+  round-trips hostile values through a real shell rather than asserting on the
+  escaped string.
+
+### Added
+
+- **`noise on correct transcripts`** in the audio report: of the clips the
+  engine transcribed without a semantic error, how many Readback marked anyway.
+  This is the number that predicts flag fatigue.
+- `AudioResult::engine_was_correct` and `::is_noise`, plus `engine_correct` and
+  `noise_on_correct` on `Coverage`.
+- `AudioResult` now carries `reference`, so reports can show what was actually
+  said.
+- The first published engine numbers, in [docs/benchmark.md](docs/benchmark.md).
+
+### Fixed
+
+- The audio report labelled the verdict text as `said:`, so a reader comparing
+  "what was said" against "what was heard" was shown the transcript twice. It
+  now prints the reference, the raw transcript, and the final text when the two
+  differ.
+
+### Results — whisper.cpp 1.9.4, ggml-tiny.en, 64 clips, no cleanup step
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.199 | 0.199 |
+| Critical semantic error rate | 0.147 | 0.147 |
+| Silent meaning flips | 14.1% | 6.2% |
+
+WER and CSER are unchanged on purpose: with no cleanup step there is nothing to
+repair, only to flag. Caught 55.6% of the engine's meaning flips.
+
+### What the run exposed
+
+- **Readback is blind when the transcript is destroyed.** tiny.en rendered
+  `abhi mat bhejo` as `Obi Matbijo`, which passed silently. A mangled string
+  contains no protected token to anchor a flag to. The layer assumes
+  mostly-correct text with one dangerous word wrong; when an engine has no
+  purchase on the language, that assumption fails.
+- **Flag fatigue is the live risk.** Half the clips tiny.en got *right* were
+  still marked up. Thresholds were calibrated against the Cleanup Guard, whose
+  evidence is a concrete reverted span, not against raw acoustic confidence from
+  a weak model. Per-engine calibration does not exist yet.
+- **`benign` does not survive an audio run.** The flag describes whether the
+  hand-written error in the text dataset was harmless, not whether the engine
+  erred. Judged by `benign` the run showed 46.2% false highlights, but 8 of
+  those 13 clips the engine genuinely broke. Hence the new metric above.
+
 ## [0.7.0] - 2026-09-27
 
 Audio. The benchmark can now measure a recogniser, not just a reliability layer.
@@ -296,7 +356,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.8.0
 [0.7.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.7.0
 [0.6.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.6.0
 [0.5.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.5.0

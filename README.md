@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.7"
+readback-core = "0.8"
 ```
 
 ```rust
@@ -267,14 +267,51 @@ nothing highlighted.** Zero noise.
 cargo run --bin readback-bench -- run
 ```
 
-Read the caveat before quoting the numbers: **v0 is a text-level benchmark**.
-The recogniser errors are hand-written rather than produced from audio, so it
+Read the caveat before quoting those numbers: **that dataset is text-level**.
+Its recogniser errors are hand-written rather than produced from audio, so it
 measures how a reliability layer responds to a given error, not how often that
-error happens — it cannot rank Whisper against Parakeet. The verdict mix is not
-representative of real traffic either, since 37 of 59 cases are deliberately
-dangerous.
+error happens. The verdict mix is not representative of real traffic either,
+since 38 of 64 cases are deliberately dangerous.
 
-Details, weights and the dataset format: [docs/benchmark.md](docs/benchmark.md).
+### Against a real engine
+
+```bash
+scripts/make-fixtures.sh
+readback-bench audio --manifest fixtures/manifest.jsonl --vad \
+  --asr 'whisper-cli -m ggml-tiny.en.bin -f {wav} --output-json-full -oj -of /tmp/rb && cat /tmp/rb.json'
+```
+
+Measured with **whisper.cpp tiny.en** over the 64 generated clips, no cleanup
+step:
+
+| Metric | Baseline | Readback |
+|---|---:|---:|
+| Word error rate | 0.199 | 0.199 |
+| Critical semantic error rate | 0.147 | 0.147 |
+| **Silent meaning flips** | **14.1%** | **6.2%** |
+
+WER and CSER do not move, and should not: with no cleanup step there is nothing
+to repair, only to flag. Caught 55.6% of the engine's meaning flips.
+
+Two findings from that run matter more than the table:
+
+- **Readback is blind when the transcript is destroyed.** tiny.en turned
+  `abhi mat bhejo` into `Obi Matbijo`, which passed silently — a mangled string
+  has no protected tokens to anchor a flag to. The layer assumes mostly-correct
+  text with one dangerous word wrong. When an engine has no purchase on the
+  language at all, that assumption fails.
+- **Flag fatigue is the live risk.** Half the clips tiny.en transcribed
+  *correctly* were still marked up. Its per-word confidence is poor, and the
+  default thresholds were calibrated against the Cleanup Guard rather than raw
+  acoustic confidence. Thresholds want calibrating per engine; nothing does that
+  yet.
+
+Every audio report ends with a coverage line stating what evidence your engine
+handed over, because one that returns a bare string gives Readback nothing to
+work with and it will correctly pass everything.
+
+Details, weights, the dataset format and the full run:
+[docs/benchmark.md](docs/benchmark.md).
 
 ## Honest limits
 
@@ -308,7 +345,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.7.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.8.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
@@ -317,6 +354,11 @@ What is not done, and is worth knowing before adopting:
 - The bundled dataset is text-level. The audio harness lifts that limit, but
   the fixtures it generates are text-to-speech, which is far cleaner than real
   speech.
+- **Thresholds are not calibrated per engine.** A weak recogniser's poor
+  confidence scores make the acoustic stage fire constantly; see the tiny.en
+  run above.
+- **A destroyed transcript defeats the layer entirely.** With no protected token
+  left in the text, there is nothing to flag.
 - Multi-word number compounds such as `twenty five` are not reduced to a value.
 - There is no Python or Swift binding yet, and no local decision-model scorer.
 
