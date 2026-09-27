@@ -7,6 +7,46 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-27
+
+An attempt to make re-decoding cheap enough to default on, and the measurement
+that says it cannot be — at least not this way.
+
+### Added
+
+- `RedecodeConfig::min_stakes`: skip the expensive path entirely when the
+  utterance would cost nothing to get wrong. **Off by default.**
+
+### The result
+
+Re-decoding firing on 64% of clips is the obvious thing to fix. Two gates were
+built and measured on the same run:
+
+| Gate | Clips re-decoded | Caught | Noise |
+|---|---:|---:|---:|
+| none | 64% | 55.6% | 38.1% |
+| sentence stakes ≥ 0.3 | 48% | 33.3% | 38.1% |
+| sentence stakes ≥ 0.5 | 45% | 33.3% | 38.1% |
+| span risk ≥ 0.25 | 34% | 11.1% | 35.7% |
+
+Gating on span risk — the intuitive choice, and what this change originally set
+out to do — returns catching to the no-re-decode baseline.
+
+**The catches were coming from spans the cheap stages rated low risk.** When an
+engine drops a word outright, what remains often looks perfectly confident:
+tiny.en rendered `deploy this to staging` as `to staging.` without hesitation.
+There is nothing suspicious in that text to gate on, which is exactly why a
+second decode is the only stage that can find it — and exactly why the cheap
+signals cannot decide when to run it.
+
+Gating on sentence stakes fares better but still trades catching roughly in
+proportion to what it saves, for a related reason: the worst engine failures
+destroy the sentence so thoroughly that no protected token survives to raise its
+stakes.
+
+So the knob ships off, documented with what it costs rather than tuned to look
+good.
+
 ## [0.11.0] - 2026-09-27
 
 Selective re-decoding. The last unbuilt stage, and the only one that goes back
@@ -506,7 +546,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.12.0
 [0.11.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.11.0
 [0.10.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.10.0
 [0.9.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.9.0

@@ -162,51 +162,61 @@ impl Readback {
             suspicion.score = suspicion.score.max(found.score);
         }
 
+        let tokens = tokenize(&guard.text);
+        let stakes = self.scorer.score(&guard.text, &tokens, lexicon);
+
+        // Re-decoding is the expensive path: it shells out to another model.
+        // It is gated on the *whole* signal rather than on confidence alone —
+        // how unsure the recogniser was, how much the fumbled word carries, and
+        // how much this sentence would cost to get wrong. Gating on confidence
+        // alone fires on almost every utterance from a weak engine, which is
+        // how a second opinion turns into a second-long pause on every paste.
         // Re-decoding is the only stage that goes back to the audio, so it runs
         // last and only where the cheap stages already found something.
-        let redecode = self.redecoder.as_ref().and_then(|decoder| {
-            let words = &input.raw.primary.words;
-            let padding = self.config.redecode.padding_ms;
-            let slices: Vec<(AudioSpan, String, crate::types::Span)> = suspicion
-                .candidates
-                .iter()
-                .filter_map(|candidate| {
-                    let word = words.get(candidate.word)?;
-                    let span = AudioSpan::new(word.start_ms?, word.end_ms?).padded(padding);
+        let redecode = self
+            .redecoder
+            .as_ref()
+            .filter(|_| stakes >= self.config.redecode.min_stakes)
+            .and_then(|decoder| {
+                let words = &input.raw.primary.words;
+                let padding = self.config.redecode.padding_ms;
+                let slices: Vec<(AudioSpan, String, crate::types::Span)> = suspicion
+                    .candidates
+                    .iter()
+                    .filter_map(|candidate| {
+                        let word = words.get(candidate.word)?;
+                        let span = AudioSpan::new(word.start_ms?, word.end_ms?).padded(padding);
 
-                    // Everything the padded slice actually contains, so the
-                    // second decode is compared against the same audio rather
-                    // than against one word out of the middle of it.
-                    let original: Vec<&str> = words
-                        .iter()
-                        .filter(|w| match (w.start_ms, w.end_ms) {
-                            (Some(s), Some(e)) => s < span.end_ms && e > span.start_ms,
-                            _ => false,
-                        })
-                        .map(|w| w.text.as_str())
-                        .collect();
+                        // Everything the padded slice actually contains, so the
+                        // second decode is compared against the same audio rather
+                        // than against one word out of the middle of it.
+                        let original: Vec<&str> = words
+                            .iter()
+                            .filter(|w| match (w.start_ms, w.end_ms) {
+                                (Some(s), Some(e)) => s < span.end_ms && e > span.start_ms,
+                                _ => false,
+                            })
+                            .map(|w| w.text.as_str())
+                            .collect();
 
-                    Some((span, original.join(" "), candidate.span))
-                })
-                .collect();
-            if slices.is_empty() {
-                return None;
-            }
-            Some(redecode::run(
-                decoder.as_ref(),
-                &slices,
-                lexicon,
-                &self.config.redecode,
-            ))
-        });
+                        Some((span, original.join(" "), candidate.span))
+                    })
+                    .collect();
+                if slices.is_empty() {
+                    return None;
+                }
+                Some(redecode::run(
+                    decoder.as_ref(),
+                    &slices,
+                    lexicon,
+                    &self.config.redecode,
+                ))
+            });
         if let Some(found) = &redecode {
             for flag in &found.flags {
                 suspicion.score = suspicion.score.max(flag.severity.weight());
             }
         }
-
-        let tokens = tokenize(&guard.text);
-        let stakes = self.scorer.score(&guard.text, &tokens, lexicon);
 
         let semantic = guard
             .flags
@@ -393,6 +403,33 @@ mod tests {
             without.risk
         );
         assert_eq!(with.provenance.spans_redecoded, 1);
+    }
+
+    #[test]
+    fn the_stakes_gate_keeps_harmless_sentences_off_the_expensive_path() {
+        // Opt-in: the gate is off by default because it costs catching. When a
+        // caller does turn it on, a sentence where being wrong is free must not
+        // pay for a second model.
+        struct Never;
+        impl crate::redecode::Redecoder for Never {
+            fn redecode(&self, _r: &crate::redecode::RedecodeRequest) -> Vec<String> {
+                panic!("a harmless sentence must not pay for a second decode");
+            }
+        }
+        let raw = Transcript::from_words(vec![
+            Word::new("sounds")
+                .with_confidence(0.38)
+                .with_timing(1000, 1300),
+            Word::new("good")
+                .with_confidence(0.97)
+                .with_timing(1300, 1700),
+        ]);
+        let mut config = Config::recommended();
+        config.redecode.min_stakes = 0.5;
+        let v = Readback::with_config(config)
+            .with_redecoder(Box::new(Never))
+            .check(CheckInput::new(raw));
+        assert_eq!(v.provenance.spans_redecoded, 0);
     }
 
     #[test]

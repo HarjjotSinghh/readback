@@ -83,6 +83,29 @@ pub struct RedecodeConfig {
     /// Share of the original's words a candidate must also contain before its
     /// disagreement is believed.
     pub min_overlap: f32,
+    /// Stakes the *utterance* must reach before any of it is decoded again.
+    ///
+    /// This gates on the sentence, not on the span. Gating on span risk was
+    /// tried and fails badly: measured on whisper.cpp tiny.en it cut the
+    /// expensive path from 64% of clips to 34%, and catching collapsed from
+    /// 55.6% to 11.1%. The catches were coming from spans the cheap stages
+    /// rated *low* risk — when an engine drops a word outright, what remains
+    /// often looks perfectly confident, which is exactly why a second decode is
+    /// the only thing that can find it.
+    ///
+    /// Gating on sentence stakes instead fares better but still trades
+    /// catching away roughly in proportion to what it saves:
+    ///
+    /// | `min_stakes` | clips re-decoded | caught |
+    /// |---|---:|---:|
+    /// | 0.0 (off) | 64% | 55.6% |
+    /// | 0.3 | 48% | 33.3% |
+    /// | 0.5 | 45% | 33.3% |
+    ///
+    /// **Defaults to off**, because there is no free lunch here and the
+    /// measured behaviour is worth preserving. Raise it when latency matters
+    /// more than catching, and know what it costs.
+    pub min_stakes: f32,
 }
 
 impl Default for RedecodeConfig {
@@ -92,6 +115,7 @@ impl Default for RedecodeConfig {
             max_spans: 2,
             min_span_ms: 400,
             min_overlap: 0.5,
+            min_stakes: 0.0,
         }
     }
 }
@@ -379,6 +403,11 @@ mod tests {
             &RedecodeConfig::default(),
         );
         assert!(out.flags.is_empty());
+    }
+
+    #[test]
+    fn the_gate_is_off_by_default() {
+        assert_eq!(RedecodeConfig::default().min_stakes, 0.0);
     }
 
     #[test]

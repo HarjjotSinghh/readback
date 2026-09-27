@@ -409,6 +409,39 @@ by at least half *and* introduces a negation, direction verb or environment.
 Loosening either — counting any protected class, or skipping the overlap check —
 took noise from 38.1% to 47.6% in testing for no extra catching.
 
+### Can the expensive path be gated? Not cheaply
+
+Re-decoding firing on 64% of clips is the obvious thing to fix, and the obvious
+fix does not work. Two gates were built and measured on the same run:
+
+| Gate | Clips re-decoded | Caught | Noise |
+|---|---:|---:|---:|
+| none | 64% | **55.6%** | 38.1% |
+| sentence stakes ≥ 0.3 | 48% | 33.3% | 38.1% |
+| sentence stakes ≥ 0.5 | 45% | 33.3% | 38.1% |
+| span risk ≥ 0.25 | 34% | 11.1% | 35.7% |
+
+Gating on **span risk** — how unsure the recogniser was about that word, scaled
+by what the word carries and what the sentence costs — is the intuitive choice
+and the worst one. It returns catching to the no-re-decode baseline.
+
+The reason is worth stating, because it is the shape of the whole problem. **The
+catches were coming from spans the cheap stages rated low risk.** When an engine
+drops a word outright, what remains often looks perfectly confident: tiny.en
+rendered `deploy this to staging` as `to staging.` with no hesitation at all.
+There is nothing suspicious in that text to gate on. That is precisely why a
+second decode is the only stage that can find it — and precisely why you cannot
+use the cheap signals to decide when to run it.
+
+Gating on sentence **stakes** fares better but still trades catching roughly in
+proportion to what it saves, for a related reason: the worst engine failures
+destroy the sentence so thoroughly that no protected token survives to raise its
+stakes.
+
+So `min_stakes` ships **off by default**, and the knob is documented with what
+it costs rather than tuned to look good. Turn it up when latency matters more
+than catching.
+
 **On the case that motivated this stage.** `cnf-003` (`do merge` for `don't
 merge`) is the failure no text-only stage can see. It is not demonstrated by the
 run above: tiny.en transcribed that particular clip correctly, so there was no

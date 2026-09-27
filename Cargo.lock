@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "readback-bench"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "readback-cli"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "readback-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -404,7 +404,7 @@ dependencies = [
 
 [[package]]
 name = "readback-node"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "napi",
  "napi-build",

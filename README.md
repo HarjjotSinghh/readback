@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.11"
+readback-core = "0.12"
 ```
 
 ```rust
@@ -348,9 +348,14 @@ readback-bench audio --manifest fixtures/manifest.jsonl --vad \
 | Noise on correct transcripts | 35.7% | 38.1% |
 
 Five times the catching for 2.4 points more noise — the best trade in the
-project. It only runs on spans the cheap stages already flagged, so a confident
-utterance never reaches it. But with a weak engine the gate barely gates: 41 of
-64 clips hit it in that run, which is far too often. Details and the caveats:
+project.
+
+It fired on 41 of 64 clips in that run, which is far too often, and the obvious
+fix does not work: gating on span risk cut firing to 34% and returned catching
+to 11.1%. **The catches come from spans the cheap stages rate low risk** — when
+an engine drops a word outright, what remains looks perfectly confident, which
+is exactly why only a second decode can find it. A `min_stakes` gate ships off
+by default with its cost documented. Details:
 [docs/benchmark.md](docs/benchmark.md).
 
 Every audio report ends with a coverage line stating what evidence your engine
@@ -392,7 +397,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.11.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.12.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
