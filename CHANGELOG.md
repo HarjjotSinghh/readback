@@ -7,6 +7,39 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+The Node binding. Most open-source dictation apps are Electron or TypeScript,
+and this is how they import the engine.
+
+### Added
+
+- **`@readback/core`**, a native Node addon built with napi-rs from the same
+  Rust core, with no runtime dependency on Rust. Targets macOS (x64, arm64),
+  Linux (x64, arm64) and Windows (x64).
+  - `new Readback(options?)` with `locales`, `vocabulary`, `recommended`, `apps`
+    and default thresholds. Rules passed in `apps` are checked before the
+    recommended set, so they override it. An unknown locale throws rather than
+    being silently ignored.
+  - `rb.check(input)` taking `text` plus any of `cleaned`, `words`,
+    `alternatives`, `signals`, `speech`, `app` and `vocabulary`. Each field
+    turns on another stage, so adoption is incremental.
+  - `checkCleanup(raw, cleaned, options?)` for running the Cleanup Guard alone.
+  - `version()`.
+- TypeScript definitions generated from the Rust source, so the doc comments in
+  an editor are the ones in the crate.
+- Flag kind and severity strings match the Rust JSON and the CLI output exactly,
+  so output from the three can be compared directly.
+- [docs/node.md](docs/node.md), including the byte-offset caveat: `flag.start`
+  and `flag.end` are **byte** offsets into `verdict.text`, not JavaScript string
+  indices, which stops mattering only if the text is ASCII.
+- CI now builds and tests the binding on Linux, macOS and Windows.
+
+### Notes
+
+- The compiled `.node` artifact is not committed; it is built per platform and
+  published as an npm artifact.
+
 ## [0.3.0] - 2026-09-27
 
 Proof. A metric that can tell a dropped filler from a dropped negation, a
@@ -129,7 +162,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.4.0
 [0.3.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.3.0
 [0.2.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.2.0
 [0.1.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.1.0

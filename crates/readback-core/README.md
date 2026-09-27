@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.3"
+readback-core = "0.4"
 ```
 
 ```rust
@@ -130,6 +130,33 @@ Guard changed, `explain` shows the arithmetic behind a verdict, and `lexicon`
 inspects the protected word lists.
 
 Full reference: [docs/cli.md](docs/cli.md).
+
+## Node
+
+```bash
+npm install @readback/core
+```
+
+```js
+import { Readback } from '@readback/core'
+
+const rb = new Readback({ recommended: true })
+
+const verdict = rb.check({
+  text: 'never merge a change like this',
+  cleaned: 'Merge a change like this.',
+})
+
+verdict.action // 'hold'
+verdict.text   // 'never Merge a change like this.'  ← restored
+verdict.flags  // [{ kind: 'dropped_negation', severity: 'critical', start: 0, end: 5, ... }]
+```
+
+A native addon with prebuilt binaries for macOS, Linux and Windows, and
+TypeScript definitions generated from the Rust source. Flag spans are **byte**
+offsets, which matters as soon as the text is not ASCII.
+
+Full reference: [docs/node.md](docs/node.md).
 
 ## How it works
 
@@ -252,7 +279,7 @@ Details, weights and the dataset format: [docs/benchmark.md](docs/benchmark.md).
 | v0.1 ✅ | Core crate: adapters, Cleanup Guard, suspicion, rules scorer, policy  |
 | v0.2 ✅ | `readback` CLI — `check`, `diff`, `explain`, `lexicon`                 |
 | v0.3 ✅ | CSER metric and CriticalSpeechBench, plus VAD-gap omission detection  |
-| v0.4    | Node binding via napi-rs, published as `@readback/core`               |
+| v0.4 ✅ | Node binding via napi-rs, published as `@readback/core`               |
 | v0.5    | Reference Tauri menu-bar app demonstrating the overlay UX             |
 
 Word error rate treats dropping `um` and dropping `not` as the same mistake,
@@ -261,8 +288,8 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.3.0. The pipeline, the CLI and the benchmark are implemented and tested;
-the API may still move before v1.0.
+v0.4.0. The pipeline, the CLI, the benchmark and the Node binding are
+implemented and tested; the API may still move before v1.0.
 
 ## License
 

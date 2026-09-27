@@ -1,0 +1,49 @@
+{
+  "name": "@readback/core",
+  "version": "0.4.0",
+  "description": "Catch the words your dictation got wrong before you hit send. A local-first reliability layer for speech-to-text.",
+  "keywords": [
+    "speech-to-text",
+    "dictation",
+    "asr",
+    "whisper",
+    "transcription",
+    "reliability"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HarjjotSinghh/readback.git",
+    "directory": "bindings/node"
+  },
+  "homepage": "https://github.com/HarjjotSinghh/readback",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "napi": {
+    "binaryName": "readback",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}
