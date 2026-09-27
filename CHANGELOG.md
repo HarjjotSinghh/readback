@@ -7,6 +7,30 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-27
+
+Readback did nothing at all for Chinese, Japanese, Korean and Thai, and said
+nothing about it. That is the worst way for a safety tool to fail.
+
+### Added
+
+- `tokenize::is_unsegmented`, detecting scripts written without spaces between
+  words.
+- **`readback audit` warns when it cannot read the script.** Every stage splits
+  on whitespace; CJK and Thai do not use it, and their characters are
+  alphanumeric, so a whole sentence arrives as a single token and every
+  comparison silently finds nothing wrong. `不要合并这个分支` losing its `不要`
+  produced a clean bill of health. The audit now says so, and `--json` reports
+  `unsupported_script`.
+
+### Documented
+
+- The limitation is stated in the README's limits and near the top of the
+  integration guide, ahead of any installation instruction.
+
+Detection is all this does. Real support needs a segmenter and a protected
+lexicon per language.
+
 ## [0.13.1] - 2026-09-27
 
 ### Changed
@@ -576,7 +600,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.14.0
 [0.13.1]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.13.1
 [0.13.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.13.0
 [0.12.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.12.0

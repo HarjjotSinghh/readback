@@ -22,6 +22,12 @@ this project with the strongest evidence behind it: on the bundled benchmark it
 catches 100% of meaning-changing edits and raises **zero** false positives on
 the controls.
 
+**If your users write Chinese, Japanese, Korean or Thai, this has nothing to
+offer them.** Every stage splits on whitespace and those scripts do not use it,
+so a whole sentence arrives as a single word and nothing can be compared. A
+deleted `不要` passes silently. `readback audit` detects this and says so instead
+of reporting a clean result, but detection is all it can do.
+
 **If your app has no cleanup step, this has nothing to offer you.** The other
 stages need acoustic evidence and are measurably noisier; see
 [docs/benchmark.md](benchmark.md) before turning any of them on. Being told that
@@ -94,7 +100,7 @@ something is being protected that should not be, that list is where to look.
 
 ```toml
 [dependencies]
-readback-core = "0.13"
+readback-core = "0.14"
 ```
 
 The guard on its own, which is all most apps want:

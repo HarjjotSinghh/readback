@@ -316,10 +316,19 @@ pub fn audit(args: crate::cli::AuditArgs, style: Style) -> Result<i32> {
         std::cmp::Reverse(outcome.flags.iter().map(|f| f.severity).max())
     });
 
+    // Silence is the dangerous answer here: a script this tokeniser cannot split
+    // produces no findings at all, which reads exactly like a clean bill of
+    // health. Say so rather than letting someone conclude they are covered.
+    let unsegmented = pairs
+        .iter()
+        .filter(|(_, raw, _)| readback_core::tokenize::is_unsegmented(raw))
+        .count();
+
     if args.json {
         let report = serde_json::json!({
             "pairs": pairs.len(),
             "changed": changed.len(),
+            "unsupported_script": unsegmented,
             "by_kind": counts,
             "findings": changed.iter().map(|(line, raw, cleaned, outcome)| {
                 serde_json::json!({
@@ -343,12 +352,35 @@ pub fn audit(args: crate::cli::AuditArgs, style: Style) -> Result<i32> {
         style.bold(&changed.len().to_string())
     );
 
-    if changed.is_empty() {
+    if unsegmented * 4 >= pairs.len() {
         println!();
         println!(
-            "{}",
-            style.dim("  nothing to fix. your cleanup step is behaving.")
+            "  {} {} of these are written in a script without spaces between words",
+            style.paint("1;4;33", "unsupported:"),
+            unsegmented
         );
+        for line in [
+            "  (Chinese, Japanese, Korean, Thai). Readback splits on whitespace, so a",
+            "  whole sentence arrives as one word and nothing can be compared.",
+            "  Zero findings below does not mean your cleanup step is safe for them.",
+        ] {
+            println!("{}", style.dim(line));
+        }
+    }
+
+    if changed.is_empty() {
+        println!();
+        if unsegmented == 0 {
+            println!(
+                "{}",
+                style.dim("  nothing to fix. your cleanup step is behaving.")
+            );
+        } else {
+            println!(
+                "{}",
+                style.dim("  nothing found in the text Readback can read. see the note above.")
+            );
+        }
         println!();
         return Ok(0);
     }

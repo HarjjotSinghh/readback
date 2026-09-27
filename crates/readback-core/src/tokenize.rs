@@ -176,6 +176,43 @@ pub fn tokenize(text: &str) -> Vec<Token> {
     tokens
 }
 
+/// True for scripts written without spaces between words: Han, Hiragana,
+/// Katakana, Hangul and Thai.
+fn is_unsegmented_script(c: char) -> bool {
+    matches!(c as u32,
+        0x3040..=0x30FF     // Hiragana, Katakana
+        | 0x3400..=0x4DBF   // CJK Extension A
+        | 0x4E00..=0x9FFF   // CJK Unified Ideographs
+        | 0xAC00..=0xD7AF   // Hangul syllables
+        | 0xF900..=0xFAFF   // CJK Compatibility Ideographs
+        | 0x0E00..=0x0E7F   // Thai
+    )
+}
+
+/// True when this text is in a script that writes without spaces, which this
+/// tokeniser cannot split.
+///
+/// Every stage here assumes words are separated by whitespace. Chinese,
+/// Japanese, Korean and Thai are not, and their characters are alphanumeric, so
+/// a whole sentence arrives as a single token and every comparison silently
+/// finds nothing wrong. Silence is the dangerous answer, so callers can ask.
+///
+/// ```
+/// use readback_core::tokenize::is_unsegmented;
+///
+/// assert!(is_unsegmented("不要合并这个分支"));
+/// assert!(!is_unsegmented("don't merge this branch"));
+/// ```
+pub fn is_unsegmented(text: &str) -> bool {
+    let counted = text.chars().filter(|c| c.is_alphanumeric()).count();
+    if counted == 0 {
+        return false;
+    }
+    let unsegmented = text.chars().filter(|c| is_unsegmented_script(*c)).count();
+    // A stray character in otherwise Latin text is a loanword, not a script.
+    unsegmented * 4 >= counted
+}
+
 /// Tokens with punctuation removed, for comparisons that shouldn't care about it.
 pub fn content_tokens(tokens: &[Token]) -> Vec<&Token> {
     tokens.iter().filter(|t| !t.is_punct()).collect()
@@ -243,6 +280,32 @@ mod tests {
         let t = tokenize("hello, world");
         assert_eq!(t.len(), 3);
         assert_eq!(t[1].kind, TokenKind::Punct);
+    }
+
+    #[test]
+    fn unsegmented_scripts_are_detected() {
+        assert!(is_unsegmented("不要合并这个分支"));
+        assert!(is_unsegmented("このブランチをマージしないで"));
+        assert!(is_unsegmented("이 브랜치를 병합하지 마세요"));
+    }
+
+    #[test]
+    fn latin_text_is_not_flagged() {
+        assert!(!is_unsegmented("don't merge this branch"));
+        assert!(!is_unsegmented("abhi mat bhejo"));
+        assert!(!is_unsegmented(""));
+        assert!(!is_unsegmented("15 %"));
+    }
+
+    #[test]
+    fn a_loanword_does_not_make_a_sentence_unsegmented() {
+        assert!(!is_unsegmented("deploy the 北京 cluster tonight please"));
+    }
+
+    #[test]
+    fn a_whole_chinese_sentence_really_is_one_token() {
+        // The reason `is_unsegmented` has to exist.
+        assert_eq!(tokenize("不要合并这个分支").len(), 1);
     }
 
     #[test]

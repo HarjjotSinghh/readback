@@ -314,3 +314,47 @@ fn audit_accepts_a_history_on_stdin() {
     let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
     assert_eq!(value["changed"], 1);
 }
+
+#[test]
+fn audit_says_when_it_cannot_read_the_script() {
+    // The dangerous case: Readback finds nothing because it cannot split the
+    // text, which reads exactly like a clean bill of health.
+    let path = history(
+        "cjk",
+        &[
+            r#"{"raw":"不要合并这个分支","cleaned":"合并这个分支。"}"#,
+            r#"{"raw":"请不要部署到生产环境","cleaned":"部署到生产环境。"}"#,
+        ],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap()]);
+    let text = stdout(&out);
+
+    assert!(
+        text.contains("unsupported"),
+        "must not imply a clean result:\n{text}"
+    );
+    assert!(!text.contains("your cleanup step is behaving"));
+    assert_eq!(out.status.code(), Some(0));
+}
+
+#[test]
+fn audit_reports_unsupported_script_count_in_json() {
+    let path = history(
+        "cjk-json",
+        &[r#"{"raw":"不要合并这个分支","cleaned":"合并这个分支。"}"#],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap(), "--json"]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["unsupported_script"], 1);
+    assert_eq!(value["changed"], 0);
+}
+
+#[test]
+fn audit_does_not_warn_on_latin_text() {
+    let path = history(
+        "latin",
+        &[r#"{"raw":"never merge this","cleaned":"Merge this."}"#],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap()]);
+    assert!(!stdout(&out).contains("unsupported"));
+}

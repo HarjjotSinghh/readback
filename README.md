@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.13"
+readback-core = "0.14"
 ```
 
 ```rust
@@ -425,7 +425,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.13.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.14.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 
@@ -438,6 +438,12 @@ What is not done, and is worth knowing before adopting:
   does not cleanly separate "changed the instruction" from "fine", and no
   threshold fixes that; `readback-bench audio --calibrate` will show you the
   trade-off for your own engine.
+- **Chinese, Japanese, Korean and Thai are not supported.** Every stage splits
+  on whitespace, and those scripts do not use it, so a whole sentence arrives as
+  one word and nothing can be compared — `不要合并这个分支` losing its `不要`
+  passes silently. `readback audit` detects and says so rather than reporting a
+  clean result. Supporting them needs a segmenter and a protected lexicon per
+  language, which is real work nobody has asked for yet.
 - **A destroyed transcript defeats the layer entirely.** With no protected token
   left in the text, there is nothing to flag.
 - Multi-word number compounds such as `twenty five` are not reduced to a value.
