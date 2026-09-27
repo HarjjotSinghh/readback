@@ -16,6 +16,7 @@ anything it reports is what a host application would see.
 | `readback check`    | Run the pipeline and report a verdict.                          |
 | `readback diff`     | Show only what the Cleanup Guard changed, and why.              |
 | `readback explain`  | Show the arithmetic behind a verdict, for tuning thresholds.    |
+| `readback audit`    | Audit a file of raw/cleaned pairs from an app's history.         |
 | `readback lexicon`  | Inspect the protected lexicon.                                  |
 
 ## `check`
@@ -219,6 +220,46 @@ readback explain --text "never merge this" --cleaned-text "Merge this." \
 Read it as: evidence is the *worst* signal available, and stakes *scale* it.
 That is why a shaky word in "lol sounds good" passes while the same shakiness in
 "don't delete production" holds.
+
+## `audit`
+
+Runs the Cleanup Guard over a whole history file, to answer "how often does our
+cleanup step change what the user meant?" without adding a dependency.
+
+```bash
+readback audit --pairs history.jsonl
+```
+
+Input is JSON Lines, one object per line:
+
+```json
+{"raw":"never merge a change like this","cleaned":"Merge a change like this."}
+```
+
+```
+  7 pairs audited
+  4 had their meaning changed by the cleanup step (57.1%)
+
+  changed_environment        1
+  dropped_negation           2
+  ...
+```
+
+| Flag              | Meaning                                                  |
+| ----------------- | -------------------------------------------------------- |
+| `--pairs <FILE>`  | JSONL file, or `-` for stdin.                             |
+| `--raw-field`     | Field holding the raw transcript. Default `raw`.          |
+| `--cleaned-field` | Field holding the rewrite. Default `cleaned`.             |
+| `--examples <N>`  | How many to print. Default 5.                             |
+| `--verbose`       | Show every changed pair.                                  |
+| `--json`          | Full report, including every finding.                     |
+
+Exits 1 when there are findings and 0 when there are none, so it works in CI.
+Unparseable lines are skipped rather than aborting. Takes the same `--vocab`,
+`--locale` and `--config` flags as everything else — supply the user dictionary
+or the audit will understate the problem.
+
+See [integrating.md](integrating.md) for the full recipe.
 
 ## `lexicon`
 

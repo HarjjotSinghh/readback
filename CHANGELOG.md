@@ -7,6 +7,29 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-27
+
+Everything needed for someone else's app to evaluate this without trusting a
+word of it.
+
+### Added
+
+- **`readback audit --pairs <file.jsonl>`**: runs the Cleanup Guard over a whole
+  history of raw/cleaned transcript pairs and reports how often the cleanup step
+  changed the meaning, broken down by kind, worst examples first. Field names
+  are configurable, unparseable lines are skipped rather than aborting, `-`
+  reads stdin, and it exits 1 on findings so it drops into CI.
+- **[docs/integrating.md](docs/integrating.md)**, written for a dictation app
+  maintainer: the five-minute audit first, wiring it in second, and the
+  questions a reviewer will ask answered ahead of time — including the case for
+  *not* adopting it.
+
+### Notes
+
+The guide leads with what this does not offer. An app with no LLM cleanup step
+gets nothing from the Cleanup Guard, and the acoustic stages are measurably
+noisier; both are stated before any installation instruction.
+
 ## [0.12.0] - 2026-09-27
 
 An attempt to make re-decoding cheap enough to default on, and the measurement
@@ -546,7 +569,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.13.0
 [0.12.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.12.0
 [0.11.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.11.0
 [0.10.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.10.0

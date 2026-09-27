@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.12"
+readback-core = "0.13"
 ```
 
 ```rust
@@ -124,12 +124,40 @@ readback check --text "never merge a change like this" \
       cleanup dropped "never"; restored from the raw transcript
 ```
 
+### Auditing an app's own history
+
+If you maintain a dictation app, this is the five-minute version. Export your
+history as JSON Lines with the raw and polished text, and find out how often
+your cleanup step changed what the user meant — no dependency added, nothing
+sent anywhere.
+
+```bash
+readback audit --pairs history.jsonl --vocab prod --vocab Recharge
+```
+
+```
+  7 pairs audited
+  4 had their meaning changed by the cleanup step (57.1%)
+
+  changed_environment        1
+  dropped_negation           2
+
+  line 1
+    said     never merge a change like this
+    became   Merge a change like this.
+    restored never Merge a change like this.
+```
+
+Exits 1 when there are findings, so it drops into CI. Full recipe, including
+how to wire the guard in afterwards: [docs/integrating.md](docs/integrating.md).
+
 `check` exits 0 for pass, 1 for highlight and 2 for hold, so a shell script can
 branch on the verdict without parsing anything. `diff` shows what the Cleanup
 Guard changed, `explain` shows the arithmetic behind a verdict, and `lexicon`
 inspects the protected word lists.
 
-Full reference: [docs/cli.md](docs/cli.md).
+Full reference: [docs/cli.md](docs/cli.md). Integrating into an app:
+[docs/integrating.md](docs/integrating.md).
 
 ## Node
 
@@ -397,7 +425,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.12.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.13.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 

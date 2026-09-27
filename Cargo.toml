@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/readback-core", "crates/readback-cli", "crates/readback-bench", "bindings/node"]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
@@ -19,7 +19,7 @@ serde_json = "1"
 similar = "3"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
-readback-core = { version = "0.12.0", path = "crates/readback-core" }
+readback-core = { version = "0.13.0", path = "crates/readback-core" }
 thiserror = "2"
 
 [profile.release]

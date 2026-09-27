@@ -252,6 +252,152 @@ pub fn lexicon(command: LexiconCommand, style: Style) -> Result<i32> {
     }
 }
 
+/// Reads one JSON object per line and pulls out the two fields we need.
+fn read_pairs(args: &crate::cli::AuditArgs) -> Result<Vec<(usize, String, String)>> {
+    let contents = crate::input::read_source(&args.pairs)?;
+    let mut pairs = Vec::new();
+    let mut skipped = 0usize;
+
+    for (i, line) in contents.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = match serde_json::from_str(line) {
+            Ok(value) => value,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let raw = value.get(&args.raw_field).and_then(|v| v.as_str());
+        let cleaned = value.get(&args.cleaned_field).and_then(|v| v.as_str());
+        match (raw, cleaned) {
+            (Some(raw), Some(cleaned)) if !raw.trim().is_empty() && !cleaned.trim().is_empty() => {
+                pairs.push((i + 1, raw.to_string(), cleaned.to_string()));
+            }
+            _ => skipped += 1,
+        }
+    }
+
+    if pairs.is_empty() {
+        bail!(
+            "no usable pairs found: expected JSON objects with `{}` and `{}` fields \
+             ({skipped} line(s) skipped)",
+            args.raw_field,
+            args.cleaned_field
+        );
+    }
+    Ok(pairs)
+}
+
+/// Audits a history file: how often did the cleanup step change the meaning?
+pub fn audit(args: crate::cli::AuditArgs, style: Style) -> Result<i32> {
+    let pairs = read_pairs(&args)?;
+    let lexicon = lexicon_from(&args.config)?;
+
+    let mut changed = Vec::new();
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+
+    for (line, raw, cleaned) in &pairs {
+        let outcome = check_cleanup(raw, cleaned, &lexicon);
+        if !outcome.reverted {
+            continue;
+        }
+        for flag in &outcome.flags {
+            *counts
+                .entry(crate::render::flag_kind_name(flag.kind))
+                .or_insert(0) += 1;
+        }
+        changed.push((*line, raw.clone(), cleaned.clone(), outcome));
+    }
+
+    // Worst first, so the most alarming example is the one people read.
+    changed.sort_by_key(|(_, _, _, outcome)| {
+        std::cmp::Reverse(outcome.flags.iter().map(|f| f.severity).max())
+    });
+
+    if args.json {
+        let report = serde_json::json!({
+            "pairs": pairs.len(),
+            "changed": changed.len(),
+            "by_kind": counts,
+            "findings": changed.iter().map(|(line, raw, cleaned, outcome)| {
+                serde_json::json!({
+                    "line": line,
+                    "raw": raw,
+                    "cleaned": cleaned,
+                    "restored": outcome.text,
+                    "flags": outcome.flags,
+                })
+            }).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(i32::from(!changed.is_empty()));
+    }
+
+    let share = changed.len() as f32 / pairs.len() as f32 * 100.0;
+    println!();
+    println!("  {} pairs audited", style.bold(&pairs.len().to_string()));
+    println!(
+        "  {} had their meaning changed by the cleanup step ({share:.1}%)",
+        style.bold(&changed.len().to_string())
+    );
+
+    if changed.is_empty() {
+        println!();
+        println!(
+            "{}",
+            style.dim("  nothing to fix. your cleanup step is behaving.")
+        );
+        println!();
+        return Ok(0);
+    }
+
+    println!();
+    for (kind, count) in &counts {
+        println!("  {:<26} {count}", style.dim(kind));
+    }
+
+    let shown: Vec<_> = if args.verbose {
+        changed.iter().collect()
+    } else {
+        changed.iter().take(args.examples).collect()
+    };
+
+    println!();
+    println!("{}", style.bold("  examples"));
+    for (line, raw, cleaned, outcome) in shown {
+        println!();
+        println!("  {}", style.dim(&format!("line {line}")));
+        // Pad before styling: ANSI escapes would otherwise count toward width.
+        let label = |text: &str| style.dim(&format!("{text:<8}"));
+        println!("    {} {}", label("said"), raw);
+        println!("    {} {}", label("became"), cleaned);
+        println!(
+            "    {} {}",
+            label("restored"),
+            crate::render::mark_text(&outcome.text, &outcome.flags, style)
+        );
+        for flag in &outcome.flags {
+            print_flag(flag, &outcome.text, style);
+        }
+    }
+
+    if !args.verbose && changed.len() > args.examples {
+        println!();
+        println!(
+            "{}",
+            style.dim(&format!(
+                "  {} more; pass --verbose to see them all",
+                changed.len() - args.examples
+            ))
+        );
+    }
+    println!();
+
+    Ok(1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

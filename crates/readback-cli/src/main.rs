@@ -17,6 +17,7 @@ fn main() -> std::process::ExitCode {
         Command::Check(args) => commands::check(args, style),
         Command::Explain(args) => commands::explain(args, style),
         Command::Diff(args) => commands::diff(args, style),
+        Command::Audit(args) => commands::audit(args, style),
         Command::Lexicon(command) => commands::lexicon(command, style),
     };
 

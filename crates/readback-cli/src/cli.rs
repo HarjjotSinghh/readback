@@ -42,9 +42,46 @@ pub enum Command {
     /// Show the arithmetic behind a verdict, for tuning thresholds.
     Explain(CheckArgs),
 
+    /// Audit a file of raw/cleaned transcript pairs.
+    ///
+    /// Point this at a dictation app's own history to find out how often its
+    /// cleanup step changed what the user meant. Nothing is sent anywhere and
+    /// no dependency is added.
+    Audit(AuditArgs),
+
     /// Inspect the protected lexicon.
     #[command(subcommand)]
     Lexicon(LexiconCommand),
+}
+
+#[derive(Debug, Args)]
+pub struct AuditArgs {
+    /// JSONL file, one object per line, or `-` for stdin.
+    #[arg(long, value_name = "FILE")]
+    pub pairs: PathBuf,
+
+    /// Field holding the raw transcript.
+    #[arg(long, value_name = "NAME", default_value = "raw")]
+    pub raw_field: String,
+
+    /// Field holding the cleaned-up rewrite.
+    #[arg(long, value_name = "NAME", default_value = "cleaned")]
+    pub cleaned_field: String,
+
+    #[command(flatten)]
+    pub config: ConfigArgs,
+
+    /// Print the full report as JSON.
+    #[arg(long)]
+    pub json: bool,
+
+    /// Show every changed pair, not just the worst few.
+    #[arg(long, short)]
+    pub verbose: bool,
+
+    /// How many examples to print. Ignored with --verbose.
+    #[arg(long, default_value_t = 5, value_name = "N")]
+    pub examples: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

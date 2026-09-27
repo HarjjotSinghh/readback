@@ -199,3 +199,118 @@ fn quiet_prints_nothing_but_still_reports_the_verdict() {
     assert!(stdout(&out).trim().is_empty(), "quiet should print nothing");
     assert_eq!(out.status.code(), Some(2));
 }
+
+/// Writes a history file and returns its path.
+fn history(name: &str, lines: &[&str]) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join("readback-audit-tests");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{name}.jsonl"));
+    std::fs::write(&path, lines.join("\n")).unwrap();
+    path
+}
+
+#[test]
+fn audit_counts_meaning_changes_across_a_history() {
+    let path = history(
+        "mixed",
+        &[
+            r#"{"raw":"never merge a change like this","cleaned":"Merge a change like this."}"#,
+            r#"{"raw":"um so we need to ship it","cleaned":"We need to ship it."}"#,
+            r#"{"raw":"deploy this to staging","cleaned":"Deploy this to production."}"#,
+        ],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap(), "--json"]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("valid JSON");
+
+    assert_eq!(value["pairs"], 3);
+    assert_eq!(value["changed"], 2, "the harmless polish must not count");
+    assert_eq!(value["by_kind"]["dropped_negation"], 1);
+    assert_eq!(value["by_kind"]["changed_environment"], 1);
+    assert_eq!(out.status.code(), Some(1), "findings exit non-zero");
+}
+
+#[test]
+fn audit_is_quiet_when_a_cleanup_step_behaves() {
+    let path = history(
+        "clean",
+        &[
+            r#"{"raw":"um so we need to ship it","cleaned":"We need to ship it."}"#,
+            r#"{"raw":"i think we're good to go","cleaned":"I think we're good to go."}"#,
+        ],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(stdout(&out).contains("your cleanup step is behaving"));
+}
+
+#[test]
+fn audit_reads_whatever_the_fields_are_called() {
+    let path = history(
+        "fields",
+        &[r#"{"transcript":"don't merge this","polished":"Merge this."}"#],
+    );
+    let out = readback(&[
+        "audit",
+        "--pairs",
+        path.to_str().unwrap(),
+        "--raw-field",
+        "transcript",
+        "--cleaned-field",
+        "polished",
+        "--json",
+    ]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["changed"], 1);
+}
+
+#[test]
+fn audit_skips_unusable_lines_rather_than_failing() {
+    let path = history(
+        "messy",
+        &[
+            "not json at all",
+            r#"{"raw":"only a raw field"}"#,
+            "",
+            r#"{"raw":"never merge this","cleaned":"Merge this."}"#,
+        ],
+    );
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap(), "--json"]);
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["pairs"], 1);
+    assert_eq!(value["changed"], 1);
+}
+
+#[test]
+fn audit_says_what_it_expected_when_nothing_matches() {
+    let path = history("wrong", &[r#"{"a":"1","b":"2"}"#]);
+    let out = readback(&["audit", "--pairs", path.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(70));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("raw") && stderr.contains("cleaned"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn audit_accepts_a_history_on_stdin() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_readback"))
+        .args(["audit", "--pairs", "-", "--json"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(br#"{"raw":"never merge this","cleaned":"Merge this."}"#)
+        .unwrap();
+
+    let out = child.wait_with_output().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(value["changed"], 1);
+}
