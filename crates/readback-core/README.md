@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.4"
+readback-core = "0.5"
 ```
 
 ```rust
@@ -157,6 +157,26 @@ TypeScript definitions generated from the Rust source. Flag spans are **byte**
 offsets, which matters as soon as the text is not ASCII.
 
 Full reference: [docs/node.md](docs/node.md).
+
+## The reference app
+
+```bash
+cd apps/demo && cargo run
+```
+
+A small Tauri window that shows what Readback decides and what the overlay
+should look like. **It has no microphone** — audio capture, hotkeys and text
+injection are the host's job, and none of them teach you anything about the
+reliability layer. Scenarios load from CriticalSpeechBench rather than being
+hard-coded, so the demo and the benchmark cannot drift apart.
+
+Every field is editable and the verdict updates as you type, which is the
+fastest way to build intuition for what trips a hold. Point it at a WAV file and
+a built-in energy VAD finds the speech regions, so omission detection can be
+seen working on real audio.
+
+Notes, including the two overlay details that are easy to get wrong:
+[docs/demo.md](docs/demo.md).
 
 ## How it works
 
@@ -280,7 +300,7 @@ Details, weights and the dataset format: [docs/benchmark.md](docs/benchmark.md).
 | v0.2 ✅ | `readback` CLI — `check`, `diff`, `explain`, `lexicon`                 |
 | v0.3 ✅ | CSER metric and CriticalSpeechBench, plus VAD-gap omission detection  |
 | v0.4 ✅ | Node binding via napi-rs, published as `@readback/core`               |
-| v0.5    | Reference Tauri menu-bar app demonstrating the overlay UX             |
+| v0.5 ✅ | Reference Tauri app demonstrating the overlay UX                      |
 
 Word error rate treats dropping `um` and dropping `not` as the same mistake,
 which is why v0.3 defines a **Critical Semantic Error Rate** instead: errors
@@ -288,8 +308,16 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.4.0. The pipeline, the CLI, the benchmark and the Node binding are
-implemented and tested; the API may still move before v1.0.
+v0.5.0. Everything on the roadmap is built: the pipeline, the CLI, the
+benchmark, the Node binding and the reference app. The API may still move before
+v1.0.
+
+What is not done, and is worth knowing before adopting:
+
+- Number normalisation is still treated as substitution, so a cleanup step
+  rewriting `three` as `3` gets reverted.
+- The benchmark is text-level, so it cannot rank recognition engines.
+- There is no Python or Swift binding yet, and no local decision-model scorer.
 
 ## License
 

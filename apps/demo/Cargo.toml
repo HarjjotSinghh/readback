@@ -1,0 +1,29 @@
+# Standalone on purpose: Tauri pulls a large dependency tree, and keeping it out
+# of the workspace keeps `cargo test` at the root fast.
+[workspace]
+
+[package]
+name = "readback-demo"
+description = "Reference desktop app for Readback, showing what the overlay UX looks like."
+version = "0.5.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/HarjjotSinghh/readback"
+publish = false
+
+[dependencies]
+readback-core = { path = "../../crates/readback-core" }
+readback-bench = { path = "../../crates/readback-bench" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hound = "3"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

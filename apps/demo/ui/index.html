@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Readback</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <header>
+        <div class="wordmark">
+          <span class="caret">&#8248;</span>
+          <span>Readback</span>
+          <span class="version" id="version"></span>
+        </div>
+        <input
+          class="search"
+          id="search"
+          type="search"
+          placeholder="Filter scenarios&hellip;"
+          aria-label="Filter scenarios"
+        />
+      </header>
+      <div class="scenarios" id="scenarios" role="listbox" aria-label="Scenarios"></div>
+    </aside>
+
+    <main>
+      <p class="note">
+        <strong>This is a demo for the SDK, not a dictation app.</strong> It has no
+        microphone. It shows the decision layer and what the overlay should look like,
+        which is the part Readback owns &mdash; a real host supplies the audio, the hotkey
+        and the paste. Scenarios come from CriticalSpeechBench, so the demo and the
+        benchmark cannot drift apart.
+      </p>
+
+      <div class="field">
+        <label for="heard">Heard &mdash; what the recogniser produced</label>
+        <textarea id="heard" rows="2" spellcheck="false"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="polished">Polished &mdash; what the cleanup step rewrote it into</label>
+        <textarea id="polished" rows="2" spellcheck="false" placeholder="Leave empty to skip the Cleanup Guard"></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="app">Destination app</label>
+          <input id="app" type="text" list="apps" placeholder="none" />
+          <datalist id="apps">
+            <option value="Ghostty"></option>
+            <option value="Cursor"></option>
+            <option value="Slack"></option>
+            <option value="Obsidian"></option>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="vocabulary">Protected vocabulary (comma separated)</label>
+          <input id="vocabulary" type="text" placeholder="Klaviyo, Recharge, prod" />
+        </div>
+      </div>
+
+      <div class="toggles">
+        <label><input type="checkbox" id="hinglish" /> Load the Hinglish lexicon</label>
+      </div>
+
+      <div class="row" style="margin-top: 14px">
+        <div class="field">
+          <label for="clip">WAV clip &mdash; runs an energy VAD to find dropped words</label>
+          <input id="clip" type="text" placeholder="/path/to/clip.wav" spellcheck="false" />
+        </div>
+        <button class="action-button" id="load-clip" type="button">Load clip</button>
+      </div>
+      <p class="clip-status" id="clip-status"></p>
+
+      <section class="verdict" aria-live="polite">
+        <div class="banner" id="banner" data-action="pass">
+          <span class="action" id="action">PASS</span>
+          <span class="what" id="what"></span>
+        </div>
+
+        <div class="output" id="output"></div>
+        <div class="baseline" id="baseline"></div>
+
+        <div class="meters">
+          <div class="meter" data-key="risk">
+            <div class="name"><span>risk</span><b id="risk-value">0.00</b></div>
+            <div class="track"><div class="fill" id="risk-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="meter" data-key="stakes">
+            <div class="name"><span>stakes</span><b id="stakes-value">0.00</b></div>
+            <div class="track"><div class="fill" id="stakes-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="meter" data-key="suspicion">
+            <div class="name"><span>suspicion</span><b id="suspicion-value">0.00</b></div>
+            <div class="track"><div class="fill" id="suspicion-fill" style="width: 0%"></div></div>
+          </div>
+        </div>
+
+        <div class="flags" id="flags"></div>
+        <p class="empty" id="empty" hidden>No flags. Readback has no opinion about this one.</p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

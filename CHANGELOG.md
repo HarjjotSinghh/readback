@@ -7,6 +7,42 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-27
+
+The reference app, and the last item on the 0.x roadmap.
+
+### Added
+
+- **`apps/demo`**, a Tauri desktop app showing what Readback decides and what
+  the overlay should look like. It deliberately has **no microphone**: audio
+  capture, hotkeys and text injection belong to the host, and none of them
+  demonstrate the reliability layer.
+  - Scenarios load from CriticalSpeechBench rather than being hard-coded, so the
+    demo and the benchmark cannot drift apart. The sidebar separates cases where
+    something went wrong from the controls, because clicking through the
+    controls is the fastest way to feel what flag fatigue would be like.
+  - Every field is editable, and the verdict updates as you type.
+  - A strikethrough line shows what the stack would have pasted without Readback
+    in the loop.
+  - A **WAV clip** field runs a small built-in energy VAD and passes the speech
+    regions to Readback the way a real host would, so omission detection can be
+    seen working on real audio. The VAD lives in `apps/demo/src/vad.rs`; it is
+    short-time energy with hysteresis, deliberately simple so the demo has no
+    model to download, and not good enough for a noisy room.
+  - Frontend is plain HTML, CSS and JavaScript with no bundler. Design tokens
+    are shadcn/ui's default neutral theme, adapted to CSS custom properties.
+    Motion is a single 160 ms meter transition; nothing animates on a keystroke.
+- [docs/demo.md](docs/demo.md), documenting the two overlay details that are
+  easy to get wrong: flag spans are **byte** offsets, and a zero-width span is a
+  caret marking a missing word rather than a range to underline.
+- CI builds and lints the demo app.
+
+### Notes
+
+- The demo is **outside the Cargo workspace** on purpose. Tauri pulls a large
+  dependency tree, and keeping it separate means `cargo test` at the repository
+  root stays fast.
+
 ## [0.4.0] - 2026-09-27
 
 The Node binding. Most open-source dictation apps are Electron or TypeScript,
@@ -162,7 +198,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.5.0
 [0.4.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.4.0
 [0.3.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.3.0
 [0.2.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.2.0

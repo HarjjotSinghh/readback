@@ -47,6 +47,23 @@ jobs:
       - run: npm test
         working-directory: bindings/node
 
+  demo:
+    name: demo app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/demo
+      # Outside the workspace, so it is built and linted on its own.
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: apps/demo
+      - run: cargo test
+        working-directory: apps/demo
+
   bench:
     name: benchmark
     runs-on: ubuntu-latest
