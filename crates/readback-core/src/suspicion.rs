@@ -5,6 +5,7 @@
 //! would cost.
 
 use crate::align::{EditKind, align, token_span_or_point};
+use crate::lexicon::Lexicon;
 use crate::tokenize::{Token, tokenize};
 use crate::types::{Flag, FlagKind, Severity, Span, Transcript, Word};
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,11 @@ pub struct SuspicionConfig {
     pub max_compression_ratio: f32,
     /// Mean token log-probability below this means a struggling decode.
     pub min_avg_logprob: f32,
+    /// Weighted word risk below this is not reported as a flag.
+    ///
+    /// The score still rises, so policy can act on it; what this suppresses is
+    /// telling the user to look at a word that does not matter.
+    pub min_word_risk: f32,
 }
 
 impl Default for SuspicionConfig {
@@ -30,6 +36,7 @@ impl Default for SuspicionConfig {
             max_no_speech: 0.6,
             max_compression_ratio: 2.4,
             min_avg_logprob: -1.0,
+            min_word_risk: 0.15,
         }
     }
 }
@@ -105,6 +112,16 @@ fn has_repetition_loop(tokens: &[Token]) -> bool {
     false
 }
 
+/// The lexical weight of a recognised word, tokenising it first so that
+/// punctuation attached by the engine does not change the answer.
+fn word_weight(text: &str, lexicon: &Lexicon) -> f32 {
+    tokenize(text)
+        .iter()
+        .filter(|t| !t.is_punct())
+        .map(|t| lexicon.lexical_weight(t))
+        .fold(0.0_f32, f32::max)
+}
+
 fn signal_flag(evidence: String) -> Flag {
     Flag {
         kind: FlagKind::HallucinationSignal,
@@ -116,7 +133,16 @@ fn signal_flag(evidence: String) -> Flag {
 }
 
 /// Scores how much to doubt this transcript, and flags the specific words.
-pub fn assess(transcript: &Transcript, text: &str, cfg: &SuspicionConfig) -> SuspicionOutcome {
+///
+/// A word's contribution is scaled by what that word carries. The recogniser
+/// being unsure about `the` is not evidence that the sentence changed meaning,
+/// even when the sentence is about production; being unsure about `never` is.
+pub fn assess(
+    transcript: &Transcript,
+    text: &str,
+    cfg: &SuspicionConfig,
+    lexicon: &Lexicon,
+) -> SuspicionOutcome {
     let mut flags = Vec::new();
     let mut score: f32 = 0.0;
 
@@ -133,8 +159,16 @@ pub fn assess(transcript: &Transcript, text: &str, cfg: &SuspicionConfig) -> Sus
             if confidence > cfg.low_confidence {
                 continue;
             }
-            let risk = (1.0 - confidence).clamp(0.0, 1.0);
+            let weight = word_weight(&words[i].text, lexicon);
+            let risk = ((1.0 - confidence) * weight).clamp(0.0, 1.0);
             score = score.max(risk);
+
+            // Below this the word is not worth the user's attention even though
+            // the recogniser was unsure: reporting it is what causes flag
+            // fatigue, and a flag nobody reads protects nobody.
+            if risk < cfg.min_word_risk {
+                continue;
+            }
             flags.push(Flag {
                 kind: FlagKind::LowConfidence,
                 severity: FlagKind::LowConfidence.severity(),
@@ -228,7 +262,13 @@ mod tests {
     fn no_confidence_data_means_no_suspicion() {
         let t = Transcript::from_text("merge this");
         assert_eq!(
-            assess(&t, "merge this", &SuspicionConfig::default()).score,
+            assess(
+                &t,
+                "merge this",
+                &SuspicionConfig::default(),
+                &Lexicon::default()
+            )
+            .score,
             0.0
         );
     }
@@ -239,17 +279,59 @@ mod tests {
             Word::new("never").with_confidence(0.42),
             Word::new("merge").with_confidence(0.97),
         ]);
-        let out = assess(&t, "never merge", &SuspicionConfig::default());
+        let out = assess(
+            &t,
+            "never merge",
+            &SuspicionConfig::default(),
+            &Lexicon::default(),
+        );
         assert_eq!(out.flags.len(), 1);
         assert_eq!(out.flags[0].span.slice("never merge"), "never");
+        // "never" is a negation, so it carries full weight: 0.58 * 1.0.
         assert!((out.score - 0.58).abs() < 1e-5);
+    }
+
+    #[test]
+    fn a_shaky_function_word_is_not_worth_reporting() {
+        // The same confidence on "the" as on "never" above.
+        let t = transcript_with(vec![
+            Word::new("the").with_confidence(0.42),
+            Word::new("build").with_confidence(0.97),
+        ]);
+        let out = assess(
+            &t,
+            "the build",
+            &SuspicionConfig::default(),
+            &Lexicon::default(),
+        );
+        assert!(
+            out.flags.is_empty(),
+            "flagging this is what causes flag fatigue"
+        );
+        assert!(out.score < 0.1, "score was {}", out.score);
+    }
+
+    #[test]
+    fn a_shaky_environment_still_counts() {
+        let t = transcript_with(vec![
+            Word::new("deploy").with_confidence(0.98),
+            Word::new("production").with_confidence(0.42),
+        ]);
+        let out = assess(
+            &t,
+            "deploy production",
+            &SuspicionConfig::default(),
+            &Lexicon::default(),
+        );
+        assert_eq!(out.flags.len(), 1);
+        assert!(out.score > 0.45, "score was {}", out.score);
     }
 
     #[test]
     fn confident_words_are_left_alone() {
         let t = transcript_with(vec![Word::new("ship").with_confidence(0.99)]);
         assert!(
-            assess(&t, "ship", &SuspicionConfig::default())
+            assess(&t, "ship", &SuspicionConfig::default(), &Lexicon::default())
                 .flags
                 .is_empty()
         );
@@ -262,7 +344,12 @@ mod tests {
             no_speech_prob: Some(0.92),
             ..Default::default()
         };
-        let out = assess(&t, "thank you for watching", &SuspicionConfig::default());
+        let out = assess(
+            &t,
+            "thank you for watching",
+            &SuspicionConfig::default(),
+            &Lexicon::default(),
+        );
         assert_eq!(out.flags[0].kind, FlagKind::HallucinationSignal);
     }
 
@@ -270,6 +357,15 @@ mod tests {
     fn engine_disagreement_raises_suspicion() {
         let mut t = Transcript::from_text("merge this change");
         t.alternatives = vec![Hypothesis::from_text("don't merge this change")];
-        assert!(assess(&t, "merge this change", &SuspicionConfig::default()).score > 0.0);
+        assert!(
+            assess(
+                &t,
+                "merge this change",
+                &SuspicionConfig::default(),
+                &Lexicon::default()
+            )
+            .score
+                > 0.0
+        );
     }
 }

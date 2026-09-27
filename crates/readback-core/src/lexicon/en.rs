@@ -171,6 +171,56 @@ pub const DESTRUCTIVE: &[&str] = &[
     "disable",
 ];
 
+/// Words that carry almost no meaning of their own. A shaky `the` says nothing
+/// about whether the sentence survived; a shaky `never` says everything.
+pub const LOW_INFORMATION: &[&str] = &[
+    "a",
+    "an",
+    "the",
+    "um",
+    "uh",
+    "er",
+    "ah",
+    "hmm",
+    "like",
+    "basically",
+    "actually",
+    "literally",
+    "yeah",
+    "okay",
+    "ok",
+    "so",
+    "well",
+    "just",
+    "really",
+    "very",
+    "kinda",
+    "sorta",
+    "i",
+    "you",
+    "we",
+    "it",
+    "that",
+    "this",
+    "is",
+    "was",
+    "are",
+    "were",
+    "be",
+    "of",
+    "to",
+    "in",
+    "on",
+    "at",
+    "and",
+    "or",
+    "but",
+    "if",
+    "as",
+    "for",
+    "with",
+];
+
 /// Numbers that arrive as words rather than digits. `fifteen` and `fifty`
 /// differ by one phoneme and by a factor of more than three.
 pub const NUMBER_WORDS: &[&str] = &[

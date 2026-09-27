@@ -135,7 +135,7 @@ impl Readback {
             },
         };
 
-        let mut suspicion = assess(&input.raw, &guard.text, &self.config.suspicion);
+        let mut suspicion = assess(&input.raw, &guard.text, &self.config.suspicion, lexicon);
 
         let omission = input.audio.as_ref().map(|audio| {
             omission::detect(
@@ -229,6 +229,8 @@ mod tests {
         let v = Readback::new().check(CheckInput::new(raw));
         assert_eq!(v.action, Action::Pass);
         assert!(v.stakes < 0.2);
+        // The word is still reported — it is a content word, so it could be
+        // wrong in a way that matters — but nothing here is worth acting on.
         assert!(
             !v.flags.is_empty(),
             "the word is still flagged, just not acted on"

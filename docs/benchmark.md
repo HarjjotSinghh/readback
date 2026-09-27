@@ -389,7 +389,19 @@ pure function of risk and the thresholds, so this is exact and needs no re-run.
   trade-off still marks 45.7% of the clips this engine got right.
 ```
 
-**Read that as a negative result, because it is one.** There is no good cutoff
+Since 0.10.0 the acoustic signal is weighted per word, which moved the curve:
+
+| Caught | Noise before | Noise after |
+|---:|---:|---:|
+| 83.3% | 45.7% | **37.0%** |
+
+That is a 19% relative reduction in noise at the same catch rate — real, and
+smaller than hoped. It also means **the shipped 0.35 default no longer sits at a
+sensible point on this curve** for an acoustic-only setup; the sweep recommends
+0.20. The default is left alone because it is calibrated for the Cleanup Guard
+path, which this change does not touch.
+
+**Read the sweep as a negative result, because it still is one.** There is no good cutoff
 on this run. Catching 83% costs marking nearly half of what the engine got
 right; getting noise under 10% drops catching to 17%. The report says so rather
 than handing over a number that looks like a fix.

@@ -81,6 +81,7 @@ pub struct Lexicon {
     number_words: HashSet<String>,
     destructive: HashSet<String>,
     imperative: HashSet<String>,
+    low_information: HashSet<String>,
     protected: HashSet<String>,
 }
 
@@ -107,6 +108,7 @@ impl Lexicon {
             number_words: HashSet::new(),
             destructive: HashSet::new(),
             imperative: HashSet::new(),
+            low_information: HashSet::new(),
             protected: HashSet::new(),
         };
 
@@ -122,6 +124,7 @@ impl Lexicon {
                     insert_all(&mut lex.number_words, en::NUMBER_WORDS);
                     insert_all(&mut lex.destructive, en::DESTRUCTIVE);
                     insert_all(&mut lex.imperative, en::IMPERATIVE);
+                    insert_all(&mut lex.low_information, en::LOW_INFORMATION);
                 }
                 Locale::Hinglish => {
                     insert_all(&mut lex.negation, hinglish::NEGATION);
@@ -233,6 +236,40 @@ impl Lexicon {
         self.imperative.contains(norm)
     }
 
+    /// True for articles, fillers and common function words.
+    pub fn is_low_information(&self, norm: &str) -> bool {
+        self.low_information.contains(norm)
+    }
+
+    /// How much it matters that *this particular word* was misheard.
+    ///
+    /// The sentence-level stakes score says how costly a wrong word would be
+    /// somewhere in this utterance. This says whether the word the recogniser
+    /// actually fumbled is one of the ones that matter. Without it, a wobble on
+    /// `the` in "deploy to production" scores the same as a wobble on
+    /// `production`, which is most of the noise an acoustic-only run produces.
+    pub fn lexical_weight(&self, token: &Token) -> f32 {
+        if token.is_punct() {
+            return 0.0;
+        }
+        if self.is_low_information(&token.norm) {
+            // An article or filler. Getting it wrong cannot flip an
+            // instruction, and reporting it is pure noise.
+            return 0.1;
+        }
+        if self.is_protected(token) {
+            // A protected word keeps full weight regardless of class. The class
+            // scale is for *stakes*, where a negation outranks a name; here the
+            // question is only whether the recogniser fumbled a word that can
+            // change the instruction, and all of them can.
+            return 1.0;
+        }
+        // An ordinary content word. A misheard verb or noun still garbles a
+        // sentence, and when a recogniser fails badly the output is a string of
+        // unremarkable words — exactly the case that must not be suppressed.
+        0.6
+    }
+
     pub fn is_protected_term(&self, norm: &str) -> bool {
         self.protected.contains(norm)
     }
@@ -290,6 +327,22 @@ mod tests {
         let mut lex = Lexicon::default();
         lex.protect(["Main"]);
         assert_eq!(class_of(&lex, "main"), Some(SemanticClass::ProtectedTerm));
+    }
+
+    #[test]
+    fn lexical_weight_ranks_words_by_what_they_carry() {
+        let lex = Lexicon::default();
+        let weight = |w: &str| lex.lexical_weight(&tokenize(w)[0]);
+        assert_eq!(weight("never"), 1.0);
+        assert!(weight("production") > weight("laptop"));
+        assert!(weight("laptop") > weight("the"));
+        assert_eq!(weight("the"), 0.1);
+    }
+
+    #[test]
+    fn an_unknown_content_word_still_counts_for_something() {
+        let lex = Lexicon::default();
+        assert_eq!(lex.lexical_weight(&tokenize("laptop")[0]), 0.6);
     }
 
     #[test]

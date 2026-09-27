@@ -7,6 +7,54 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-27
+
+The acoustic stage now asks *which* word the recogniser fumbled, not just how
+badly.
+
+### Changed
+
+- **Acoustic suspicion is weighted per word.** A word's contribution is scaled
+  by what that word carries: a protected token at full weight, an ordinary
+  content word at 0.6, an article or filler at 0.1. Previously the score was the
+  maximum raw doubt across the utterance, so a wobble on `the` in "deploy to
+  production" scored exactly as high as a wobble on `production`. That was the
+  mechanism behind most of the noise an acoustic-only run produced.
+- **Trivial flags are no longer reported.** A weighted word risk below
+  `SuspicionConfig::min_word_risk` (0.15) still raises the score, so policy can
+  act on it, but the user is not told to look at a word that cannot flip the
+  instruction.
+- `suspicion::assess` takes a `&Lexicon`.
+
+### Added
+
+- `Lexicon::lexical_weight` and `Lexicon::is_low_information`, with a list of
+  articles, fillers and common function words.
+
+### Results
+
+Measured on whisper.cpp base.en, 64 clips, compared at a matched catch rate:
+
+| Caught | Noise before | Noise after |
+|---:|---:|---:|
+| 83.3% | 45.7% | 37.0% |
+
+A 19% relative reduction in noise for the same catching — real, and smaller than
+hoped.
+
+### The cost, stated plainly
+
+- **The text benchmark's catch rate fell from 100% to 95.7%.** The case lost is
+  `cnf-003`, where the recogniser heard `do merge that branch` for `don't merge
+  that branch`. The dangerous word in the output is `do`, an ordinary word, so no
+  amount of lexical weighting can see it. This is the same blind spot 0.8.0
+  recorded: when the transcript itself looks unremarkable, there is nothing to
+  weight.
+- **The shipped 0.35 highlight default no longer sits well on the acoustic
+  curve.** The sweep now recommends 0.20 for a raw-acoustic setup. The default is
+  unchanged because it is calibrated for the Cleanup Guard path, which this
+  change does not touch — run `--calibrate` against your own engine.
+
 ## [0.9.0] - 2026-09-27
 
 Threshold calibration, and the negative result it produced.
@@ -400,7 +448,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.10.0
 [0.9.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.9.0
 [0.8.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.8.0
 [0.7.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.7.0

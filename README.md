@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.9"
+readback-core = "0.10"
 ```
 
 ```rust
@@ -311,7 +311,12 @@ Three findings from those runs matter more than the tables:
 - **Flag fatigue is the live risk, and a better model does not fix it.** Half
   the clips tiny.en transcribed *correctly* were still marked up; base.en only
   brought that to 39%.
-- **The acoustic-only signal is weakly discriminative.** `--calibrate` sweeps
+- **The acoustic signal is weighted per word.** A wobble on `the` in "deploy to
+  production" is not evidence that the instruction changed; a wobble on
+  `production` is. Weighting by what the fumbled word carries cut noise from
+  45.7% to 37.0% at a matched 83.3% catch rate, and stopped trivial words being
+  reported at all.
+- **It is still weakly discriminative.** `--calibrate` sweeps
   the highlight threshold and reports the trade-off, and on these runs there is
   no good cutoff: catching 83% of flips costs marking 46% of what the engine got
   right. The tool says so rather than handing over a number that looks like a
@@ -358,7 +363,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.9.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.10.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 

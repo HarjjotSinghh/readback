@@ -137,3 +137,60 @@ fn no_evidence_means_no_opinion() {
     assert!(v.flags.is_empty());
     assert!(!v.provenance.cleanup_guard_ran);
 }
+
+#[test]
+fn a_wobble_on_a_function_word_is_not_a_wobble_on_the_instruction() {
+    // The same sentence, the same confidence, a different word fumbled.
+    // Sentence-level stakes are identical; only the shaky word differs.
+    let shaky = |target: &str| {
+        let words = ["deploy", "this", "to", "production"]
+            .iter()
+            .map(|w| {
+                let confidence = if *w == target { 0.42 } else { 0.98 };
+                Word::new(*w).with_confidence(confidence)
+            })
+            .collect();
+        Readback::recommended().check(
+            CheckInput::new(Transcript::from_words(words)).with_context(Context::for_app("Slack")),
+        )
+    };
+
+    let on_filler = shaky("this");
+    let on_environment = shaky("production");
+
+    assert!(
+        on_environment.risk > on_filler.risk,
+        "a shaky environment must outrank a shaky function word: {} vs {}",
+        on_environment.risk,
+        on_filler.risk
+    );
+    assert!(
+        on_filler.flags.is_empty(),
+        "a shaky \"this\" cannot flip the instruction and is not worth reporting"
+    );
+    assert!(!on_environment.flags.is_empty());
+}
+
+#[test]
+fn stakes_still_scale_a_genuine_doubt() {
+    // Identical shaky word, different sentences around it: stakes still apply.
+    let sentence = |words: &[&str]| {
+        let built = words
+            .iter()
+            .map(|w| {
+                let confidence = if *w == "production" { 0.42 } else { 0.98 };
+                Word::new(*w).with_confidence(confidence)
+            })
+            .collect();
+        Readback::recommended().check(CheckInput::new(Transcript::from_words(built)))
+    };
+
+    let instruction = sentence(&["delete", "the", "production", "tables"]);
+    let remark = sentence(&["production", "looked", "fine", "yesterday"]);
+    assert!(
+        instruction.risk > remark.risk,
+        "{} vs {}",
+        instruction.risk,
+        remark.risk
+    );
+}
