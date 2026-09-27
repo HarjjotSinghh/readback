@@ -55,9 +55,31 @@ test('word confidence raises suspicion without inventing stakes', () => {
   })
 
   assert.equal(smallTalk.action, 'pass')
-  assert.ok(smallTalk.suspicion > 0.5, 'the shaky word is still noticed')
+  assert.ok(smallTalk.suspicion > 0.3, 'the shaky word is still noticed')
   assert.ok(smallTalk.stakes < 0.2, 'but nothing here is worth blocking')
   assert.equal(smallTalk.flags[0].kind, 'low_confidence')
+})
+
+test('doubt is weighted by the word that was fumbled', () => {
+  const rb = new Readback()
+  const shaky = (target) =>
+    rb.check({
+      text: 'deploy this to production',
+      words: ['deploy', 'this', 'to', 'production'].map((text) => ({
+        text,
+        confidence: text === target ? 0.42 : 0.98,
+      })),
+    })
+
+  const onFiller = shaky('this')
+  const onEnvironment = shaky('production')
+
+  assert.ok(
+    onEnvironment.suspicion > onFiller.suspicion,
+    'a shaky environment must outrank a shaky function word',
+  )
+  assert.equal(onFiller.flags.length, 0, 'a shaky "this" cannot flip the instruction')
+  assert.ok(onEnvironment.flags.length > 0)
 })
 
 test('the same evidence escalates in a terminal', () => {

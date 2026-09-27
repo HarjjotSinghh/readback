@@ -104,6 +104,8 @@ export interface JsProvenance {
   cleanupGuardRan: boolean
   cleanupReverted: boolean
   omissionCheckRan: boolean
+  /** Audio slices decoded a second time, if a re-decoder was configured. */
+  spansRedecoded: number
   scorer: string
 }
 

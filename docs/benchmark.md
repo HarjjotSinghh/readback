@@ -367,6 +367,55 @@ even though the cleanup itself was introducing errors.
 **The acoustic-only signal is weakly discriminative.** That is what the
 threshold sweep shows.
 
+### Re-decoding shaky slices
+
+The only stage that goes back to the audio. When a span looks shaky, the host is
+asked to decode *just that slice* again — a bigger model, a wider beam — and the
+answers are compared.
+
+```bash
+readback-bench audio --manifest fixtures/manifest.jsonl --vad \
+  --asr 'whisper-cli -m ggml-tiny.en.bin -f {wav} --output-json-full -oj -of /tmp/rb && cat /tmp/rb.json' \
+  --redecode 'whisper-cli -m ggml-base.en.bin -f {wav} -ot {start} -d {duration} -bs 8 --no-prints'
+```
+
+`{start}` and `{duration}` are milliseconds. A cheap first pass with an
+expensive second opinion is the intended shape.
+
+tiny.en as the first pass, base.en re-decoding only the flagged slices:
+
+| | tiny.en | + base.en re-decode |
+|---|---:|---:|
+| Meaning flips reaching the user | 12.5% | **6.2%** |
+| Caught | 11.1% | **55.6%** |
+| Noise on correct transcripts | 35.7% | 38.1% |
+
+**Five times the catching for 2.4 points more noise.** That is the best trade in
+this document, and it is the only stage that can act on evidence the text does
+not contain.
+
+Two things to know before turning it on.
+
+**The expensive path fired on 41 of 64 clips.** Re-decoding is gated on low
+confidence, and a weak recogniser makes everything low-confidence, so the gate
+barely gates. For a dictation tool whose whole premise is that most utterances
+paste instantly, 64% is far too often — the run took 24 s instead of 9 s. Cap it
+with `max_spans`, and expect a stronger engine to trigger it far less.
+
+**The disagreement test is deliberately narrow.** A second decode of a padded
+slice has *less* context than the first pass and will happily return something
+unrelated, so a candidate is only believed when it overlaps the original's words
+by at least half *and* introduces a negation, direction verb or environment.
+Loosening either — counting any protected class, or skipping the overlap check —
+took noise from 38.1% to 47.6% in testing for no extra catching.
+
+**On the case that motivated this stage.** `cnf-003` (`do merge` for `don't
+merge`) is the failure no text-only stage can see. It is not demonstrated by the
+run above: tiny.en transcribed that particular clip correctly, so there was no
+error to recover, and the hold it received is a false one. The mechanism is
+covered by a unit test and by the text benchmark; this audio run shows the stage
+working on the errors tiny.en *did* make, which is a different claim.
+
 ### Calibrating thresholds
 
 ```bash

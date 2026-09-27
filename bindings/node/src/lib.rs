@@ -126,6 +126,8 @@ pub struct JsProvenance {
     pub cleanup_guard_ran: bool,
     pub cleanup_reverted: bool,
     pub omission_check_ran: bool,
+    /// Audio slices decoded a second time, if a re-decoder was configured.
+    pub spans_redecoded: u32,
     pub scorer: String,
 }
 
@@ -184,6 +186,7 @@ fn flag_kind_name(kind: readback_core::FlagKind) -> String {
         readback_core::FlagKind::LowConfidence => "low_confidence",
         readback_core::FlagKind::HallucinationSignal => "hallucination_signal",
         readback_core::FlagKind::PossibleOmission => "possible_omission",
+        readback_core::FlagKind::RedecodeDisagreement => "redecode_disagreement",
     }
     .to_string()
 }
@@ -212,6 +215,7 @@ fn verdict_to_js(verdict: Verdict) -> JsVerdict {
             cleanup_guard_ran: verdict.provenance.cleanup_guard_ran,
             cleanup_reverted: verdict.provenance.cleanup_reverted,
             omission_check_ran: verdict.provenance.omission_check_ran,
+            spans_redecoded: verdict.provenance.spans_redecoded as u32,
             scorer: verdict.provenance.scorer,
         },
     }

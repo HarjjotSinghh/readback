@@ -1,6 +1,6 @@
 {
   "name": "@readback/core",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Catch the words your dictation got wrong before you hit send. A local-first reliability layer for speech-to-text.",
   "keywords": [
     "speech-to-text",

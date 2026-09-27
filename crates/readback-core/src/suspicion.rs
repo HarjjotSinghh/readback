@@ -41,11 +41,25 @@ impl Default for SuspicionConfig {
     }
 }
 
+/// A word worth asking about again, with the byte span it occupies in the
+/// output text so a later flag can point at it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Candidate {
+    /// Index into the transcript's word list.
+    pub word: usize,
+    /// Weighted doubt, highest first when sorted.
+    pub risk: f32,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SuspicionOutcome {
     /// `0.0..=1.0`. Zero when the engine reported no confidence data at all.
     pub score: f32,
     pub flags: Vec<Flag>,
+    /// Words the recogniser was unsure about that carry enough meaning to be
+    /// worth a second decode, worst first.
+    pub candidates: Vec<Candidate>,
 }
 
 /// Maps each input word onto a byte span in `text`.
@@ -144,6 +158,7 @@ pub fn assess(
     lexicon: &Lexicon,
 ) -> SuspicionOutcome {
     let mut flags = Vec::new();
+    let mut candidates: Vec<Candidate> = Vec::new();
     let mut score: f32 = 0.0;
 
     let words = &transcript.primary.words;
@@ -162,6 +177,11 @@ pub fn assess(
             let weight = word_weight(&words[i].text, lexicon);
             let risk = ((1.0 - confidence) * weight).clamp(0.0, 1.0);
             score = score.max(risk);
+            candidates.push(Candidate {
+                word: i,
+                risk,
+                span: spans[i],
+            });
 
             // Below this the word is not worth the user's attention even though
             // the recogniser was unsure: reporting it is what causes flag
@@ -234,9 +254,11 @@ pub fn assess(
         }
     }
 
+    candidates.sort_by(|a, b| b.risk.total_cmp(&a.risk));
     SuspicionOutcome {
         score: score.clamp(0.0, 1.0),
         flags,
+        candidates,
     }
 }
 
@@ -325,6 +347,23 @@ mod tests {
         );
         assert_eq!(out.flags.len(), 1);
         assert!(out.score > 0.45, "score was {}", out.score);
+    }
+
+    #[test]
+    fn candidates_are_ranked_by_weighted_doubt() {
+        let t = transcript_with(vec![
+            Word::new("the").with_confidence(0.40),
+            Word::new("production").with_confidence(0.45),
+        ]);
+        let out = assess(
+            &t,
+            "the production",
+            &SuspicionConfig::default(),
+            &Lexicon::default(),
+        );
+        assert_eq!(out.candidates.len(), 2);
+        assert_eq!(out.candidates[0].word, 1, "the protected word comes first");
+        assert!(out.candidates[0].risk > out.candidates[1].risk);
     }
 
     #[test]

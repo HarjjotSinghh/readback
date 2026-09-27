@@ -260,6 +260,9 @@ pub enum FlagKind {
     /// Voice-activity detection found speech that no transcribed word covers,
     /// so a word was probably dropped here.
     PossibleOmission,
+    /// Decoding the same slice of audio again produced a protected word the
+    /// first pass did not have.
+    RedecodeDisagreement,
 }
 
 impl FlagKind {
@@ -268,7 +271,8 @@ impl FlagKind {
             FlagKind::DroppedNegation
             | FlagKind::AlteredNegation
             | FlagKind::ChangedDirection
-            | FlagKind::ChangedEnvironment => Severity::Critical,
+            | FlagKind::ChangedEnvironment
+            | FlagKind::RedecodeDisagreement => Severity::Critical,
             FlagKind::ChangedNumber
             | FlagKind::ChangedTemporal
             | FlagKind::ChangedQuantifier
@@ -329,6 +333,9 @@ pub struct Provenance {
     /// True when voice-activity regions were supplied and checked for gaps.
     #[serde(default)]
     pub omission_check_ran: bool,
+    /// How many audio slices were decoded a second time, if any.
+    #[serde(default)]
+    pub spans_redecoded: usize,
     pub scorer: String,
 }
 

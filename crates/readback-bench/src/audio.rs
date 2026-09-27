@@ -16,6 +16,7 @@ use crate::{dataset, vad};
 use anyhow::{Context as _, Result, bail};
 use readback_core::config::Config;
 use readback_core::lexicon::Lexicon;
+use readback_core::redecode::{RedecodeRequest, Redecoder};
 use readback_core::{Action, AudioEvidence, CheckInput, Context, Readback, Transcript, adapters};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -131,6 +132,85 @@ impl CleanupCommand {
     }
 }
 
+/// A second decode of one slice, run as an external command.
+///
+/// `{wav}` is the clip, `{start}` and `{duration}` are milliseconds. A decoder
+/// that ignores them and re-runs the whole clip still works; it is just slower
+/// and less likely to disagree usefully.
+pub struct CommandRedecoder {
+    template: String,
+    wav: PathBuf,
+    label: String,
+}
+
+impl CommandRedecoder {
+    pub fn new(template: impl Into<String>, wav: PathBuf) -> Result<Self> {
+        let template = template.into();
+        if !template.contains("{wav}") {
+            bail!("the re-decode command must contain {{wav}}");
+        }
+        Ok(Self {
+            template,
+            wav,
+            label: "command".to_string(),
+        })
+    }
+}
+
+impl Redecoder for CommandRedecoder {
+    fn redecode(&self, request: &RedecodeRequest) -> Vec<String> {
+        let command = self
+            .template
+            .replace("{wav}", &shell_quote(&self.wav.display().to_string()))
+            .replace("{start}", &request.span.start_ms.to_string())
+            .replace("{duration}", &request.span.duration_ms().to_string())
+            .replace("{end}", &request.span.end_ms.to_string());
+
+        let Ok(output) = Command::new("sh").arg("-c").arg(&command).output() else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            // A second opinion that fails is simply no opinion; it must never
+            // take the whole run down.
+            return Vec::new();
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        match parse_transcript(&stdout) {
+            // whisper-cli prints `[timestamps]  text` unless asked otherwise,
+            // so strip anything in brackets before comparing.
+            Ok(transcript) => {
+                let text = strip_timestamps(&transcript.primary.text);
+                if text.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![text]
+                }
+            }
+            Err(_) => Vec::new(),
+        }
+    }
+
+    fn name(&self) -> &str {
+        &self.label
+    }
+}
+
+/// Removes `[00:00:00.000 --> 00:00:01.200]` style prefixes.
+fn strip_timestamps(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut depth = 0usize;
+    for c in text.chars() {
+        match c {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Parses engine output, guessing the format from its shape.
 fn parse_transcript(payload: &str) -> Result<Transcript> {
     let trimmed = payload.trim();
@@ -170,6 +250,9 @@ pub struct AudioResult {
     /// True when the engine reported word timings, without which voice-activity
     /// regions cannot be turned into omission evidence.
     pub had_timings: bool,
+    /// Slices decoded a second time for this clip.
+    #[serde(default)]
+    pub spans_redecoded: usize,
 }
 
 impl AudioResult {
@@ -192,11 +275,13 @@ impl AudioResult {
 }
 
 /// Runs one clip end to end.
+#[allow(clippy::too_many_arguments)]
 pub fn run_case(
     case: &AudioCase,
     base: &Path,
     asr: &AsrCommand,
     cleanup: Option<&CleanupCommand>,
+    redecode: Option<&str>,
     use_vad: bool,
     config: &Config,
 ) -> Result<AudioResult> {
@@ -243,7 +328,12 @@ pub fn run_case(
         .iter()
         .any(|w| w.start_ms.is_some() && w.end_ms.is_some());
 
-    let verdict = Readback::with_config(config).check(input);
+    let mut readback = Readback::with_config(config);
+    if let Some(template) = redecode {
+        readback = readback.with_redecoder(Box::new(CommandRedecoder::new(template, wav.clone())?));
+    }
+    let verdict = readback.check(input);
+    let verdict_spans = verdict.provenance.spans_redecoded;
     let baseline_text = polished.unwrap_or_else(|| heard.clone());
 
     Ok(AudioResult {
@@ -266,6 +356,7 @@ pub fn run_case(
         clip_ms: clip.duration_ms(),
         had_confidence,
         had_timings,
+        spans_redecoded: verdict_spans,
     })
 }
 
@@ -480,6 +571,7 @@ mod tests {
             clip_ms: 0,
             had_confidence: true,
             had_timings: true,
+            spans_redecoded: 0,
         }
     }
 
@@ -514,6 +606,33 @@ mod tests {
         let best = best_threshold(&calibrate(&results)).unwrap();
         assert_eq!(best.caught, 0.0);
         assert_eq!(best.noise, 0.0, "a high threshold should mark nothing");
+    }
+
+    #[test]
+    fn timestamps_are_stripped_from_a_second_decode() {
+        assert_eq!(
+            strip_timestamps("[00:00:00.000 --> 00:00:01.200]   Don't merge."),
+            "Don't merge."
+        );
+        assert_eq!(strip_timestamps("  plain text  "), "plain text");
+    }
+
+    #[test]
+    fn a_redecode_command_must_name_the_clip() {
+        let wav = PathBuf::from("clip.wav");
+        assert!(CommandRedecoder::new("whisper --offset {start}", wav.clone()).is_err());
+        assert!(CommandRedecoder::new("whisper {wav} --offset {start}", wav).is_ok());
+    }
+
+    #[test]
+    fn a_failing_second_decode_is_simply_no_opinion() {
+        let decoder =
+            CommandRedecoder::new("sh -c 'exit 1' {wav}", PathBuf::from("clip.wav")).unwrap();
+        let request = RedecodeRequest {
+            span: readback_core::AudioSpan::new(0, 500),
+            original: "do".into(),
+        };
+        assert!(decoder.redecode(&request).is_empty());
     }
 
     #[test]

@@ -57,6 +57,7 @@ pub mod lexicon;
 pub mod number;
 pub mod omission;
 pub mod policy;
+pub mod redecode;
 pub mod scorer;
 pub mod suspicion;
 pub mod tokenize;
@@ -69,6 +70,7 @@ pub use guard::{GuardOutcome, check_cleanup};
 pub use lexicon::{Lexicon, Locale, SemanticClass};
 pub use omission::OmissionConfig;
 pub use policy::{AppPolicy, AppRule, Policy};
+pub use redecode::{AudioSpan, RedecodeConfig, RedecodeRequest, Redecoder};
 pub use scorer::{RulesScorer, StakesScorer};
 pub use types::{
     Action, AudioEvidence, Context, DecodeSignals, Flag, FlagKind, Hypothesis, Provenance,

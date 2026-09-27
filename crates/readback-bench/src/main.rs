@@ -87,6 +87,14 @@ enum Command {
         #[arg(long)]
         vad: bool,
 
+        /// Decode shaky slices a second time. `{wav}`, `{start}` and
+        /// `{duration}` are substituted; milliseconds for the last two.
+        ///
+        /// This is the only stage that can catch a confidently wrong word that
+        /// reads perfectly, and the only one that costs real time.
+        #[arg(long, value_name = "CMD")]
+        redecode: Option<String>,
+
         #[arg(long, value_name = "CATEGORY")]
         category: Option<String>,
 
@@ -214,6 +222,7 @@ fn main() -> Result<()> {
             label,
             cleanup,
             vad,
+            redecode,
             category,
             config,
             json,
@@ -242,6 +251,7 @@ fn main() -> Result<()> {
                     &base,
                     &asr,
                     cleanup.as_ref(),
+                    redecode.as_deref(),
                     vad,
                     &bench,
                 )?);

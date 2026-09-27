@@ -3,6 +3,7 @@
 use crate::lexicon::Locale;
 use crate::omission::OmissionConfig;
 use crate::policy::Policy;
+use crate::redecode::RedecodeConfig;
 use crate::suspicion::SuspicionConfig;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +36,8 @@ pub struct Config {
     #[serde(default)]
     pub omission: OmissionConfig,
     #[serde(default)]
+    pub redecode: RedecodeConfig,
+    #[serde(default)]
     pub risk: RiskWeights,
 }
 
@@ -50,6 +53,7 @@ impl Default for Config {
             policy: Policy::default(),
             suspicion: SuspicionConfig::default(),
             omission: OmissionConfig::default(),
+            redecode: RedecodeConfig::default(),
             risk: RiskWeights::default(),
         }
     }

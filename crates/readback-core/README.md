@@ -57,7 +57,7 @@ Plus the repaired text, and a list of flagged spans with a reason for each.
 
 ```toml
 [dependencies]
-readback-core = "0.10"
+readback-core = "0.11"
 ```
 
 ```rust
@@ -324,6 +324,35 @@ Three findings from those runs matter more than the tables:
   threshold** — it is the only configuration where Readback repairs rather than
   merely flags.
 
+### Asking again about the part that looked wrong
+
+The one stage that goes back to the audio. A shaky span is decoded a second
+time — bigger model, wider beam — and the answers compared. It is the only way
+to catch a confidently wrong word that reads perfectly: `do merge that branch`
+is fluent, unremarkable, and the opposite of what was said.
+
+```rust
+let rb = Readback::recommended().with_redecoder(Box::new(my_decoder));
+```
+
+```bash
+readback-bench audio --manifest fixtures/manifest.jsonl --vad \
+  --asr '...tiny model...' \
+  --redecode 'whisper-cli -m ggml-base.en.bin -f {wav} -ot {start} -d {duration} -bs 8'
+```
+
+| | tiny.en | + base.en re-decode |
+|---|---:|---:|
+| Meaning flips reaching the user | 12.5% | **6.2%** |
+| Caught | 11.1% | **55.6%** |
+| Noise on correct transcripts | 35.7% | 38.1% |
+
+Five times the catching for 2.4 points more noise — the best trade in the
+project. It only runs on spans the cheap stages already flagged, so a confident
+utterance never reaches it. But with a weak engine the gate barely gates: 41 of
+64 clips hit it in that run, which is far too often. Details and the caveats:
+[docs/benchmark.md](docs/benchmark.md).
+
 Every audio report ends with a coverage line stating what evidence your engine
 handed over, because one that returns a bare string gives Readback nothing to
 work with and it will correctly pass everything.
@@ -363,7 +392,7 @@ weighted by whether they altered intent.
 
 ## Status
 
-v0.10.0. Everything on the roadmap is built: the pipeline, the CLI, the
+v0.11.0. Everything on the roadmap is built: the pipeline, the CLI, the
 benchmark, the Node binding and the reference app. The API may still move before
 v1.0.
 

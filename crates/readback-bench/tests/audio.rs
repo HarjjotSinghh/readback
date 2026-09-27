@@ -108,7 +108,7 @@ fn a_dropped_negation_from_the_engine_is_measured() {
     .unwrap();
 
     let case = f.case("neg", "never merge a change like this", false);
-    let result = audio::run_case(&case, &f.dir, &asr, None, false, &config()).unwrap();
+    let result = audio::run_case(&case, &f.dir, &asr, None, None, false, &config()).unwrap();
 
     assert_eq!(result.heard, "merge a change like this");
     assert!(
@@ -130,7 +130,7 @@ fn a_correct_transcript_scores_clean_and_passes() {
     .unwrap();
 
     let case = f.case("ok", "ship it when CI passes", true);
-    let result = audio::run_case(&case, &f.dir, &asr, None, false, &config()).unwrap();
+    let result = audio::run_case(&case, &f.dir, &asr, None, None, false, &config()).unwrap();
 
     assert_eq!(result.case.readback.cser, 0.0);
     assert_eq!(result.case.action, Action::Pass);
@@ -144,8 +144,8 @@ fn vad_supplies_speech_regions_from_the_clip() {
     let asr = AsrCommand::new(f.engine(&[("neg", r#"{"text":"merge this"}"#)]), None).unwrap();
     let case = f.case("neg", "never merge this", false);
 
-    let without = audio::run_case(&case, &f.dir, &asr, None, false, &config()).unwrap();
-    let with = audio::run_case(&case, &f.dir, &asr, None, true, &config()).unwrap();
+    let without = audio::run_case(&case, &f.dir, &asr, None, None, false, &config()).unwrap();
+    let with = audio::run_case(&case, &f.dir, &asr, None, None, true, &config()).unwrap();
 
     assert_eq!(without.speech_regions, 0);
     assert!(
@@ -168,7 +168,8 @@ fn a_cleanup_command_is_run_over_the_transcript() {
         readback_bench::audio::CleanupCommand::new("printf '%s' {text} | sed 's/ not//'").unwrap();
 
     let case = f.case("neg", "we should not merge this", false);
-    let result = audio::run_case(&case, &f.dir, &asr, Some(&cleanup), false, &config()).unwrap();
+    let result =
+        audio::run_case(&case, &f.dir, &asr, Some(&cleanup), None, false, &config()).unwrap();
 
     assert_eq!(result.case.baseline_text, "we should merge this");
     assert!(
@@ -184,7 +185,7 @@ fn a_missing_clip_is_reported_clearly() {
     let asr = AsrCommand::new(f.engine(&[]), None).unwrap();
     let case = f.case("nope", "anything", false);
 
-    let error = audio::run_case(&case, &f.dir, &asr, None, false, &config()).unwrap_err();
+    let error = audio::run_case(&case, &f.dir, &asr, None, None, false, &config()).unwrap_err();
     assert!(error.to_string().contains("clip not found"), "{error}");
 }
 
@@ -195,7 +196,7 @@ fn a_failing_engine_is_reported_clearly() {
     let asr = AsrCommand::new("sh -c 'echo boom >&2; exit 1' {wav}", None).unwrap();
     let case = f.case("neg", "anything", false);
 
-    let error = audio::run_case(&case, &f.dir, &asr, None, false, &config()).unwrap_err();
+    let error = audio::run_case(&case, &f.dir, &asr, None, None, false, &config()).unwrap_err();
     assert!(error.to_string().contains("boom"), "{error}");
 }
 
@@ -218,7 +219,7 @@ fn results_aggregate_the_same_way_the_text_run_does() {
     ];
     let results: Vec<_> = cases
         .iter()
-        .map(|case| audio::run_case(case, &f.dir, &asr, None, false, &config()).unwrap())
+        .map(|case| audio::run_case(case, &f.dir, &asr, None, None, false, &config()).unwrap())
         .collect();
 
     let scored: Vec<_> = results.iter().map(|r| r.case.clone()).collect();

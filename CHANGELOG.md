@@ -7,6 +7,64 @@ below 1.0 the API may change in any minor release.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-27
+
+Selective re-decoding. The last unbuilt stage, and the only one that goes back
+to the audio.
+
+### Added
+
+- **`readback_core::redecode`**: when a span looks shaky, the host is asked to
+  decode *just that slice* again — a bigger model, a wider beam — and the
+  answers are compared. `Readback::with_redecoder` takes any `Redecoder`; core
+  still never touches audio, it only decides which slices are worth the cost.
+  - A new `RedecodeDisagreement` flag, always critical.
+  - `RedecodeConfig` with `padding_ms`, `max_spans`, `min_span_ms` and
+    `min_overlap`.
+  - `Provenance::spans_redecoded`.
+- `SuspicionOutcome::candidates`: the words worth asking about again, ranked by
+  weighted doubt.
+- **`readback-bench audio --redecode '<cmd>'`**, substituting `{wav}`,
+  `{start}` and `{duration}`. A failing second decode is treated as no opinion
+  rather than taking the run down.
+- `redecode_disagreement` and `spansRedecoded` in the Node binding.
+
+### Results — tiny.en first pass, base.en re-decoding flagged slices
+
+| | tiny.en | + base.en re-decode |
+|---|---:|---:|
+| Meaning flips reaching the user | 12.5% | 6.2% |
+| Caught | 11.1% | 55.6% |
+| Noise on correct transcripts | 35.7% | 38.1% |
+
+Five times the catching for 2.4 points more noise — the best trade measured in
+this project so far.
+
+### Design notes
+
+- **The disagreement test is deliberately narrow.** A second decode of a padded
+  slice has *less* context than the first pass and will return something
+  unrelated given the chance. A candidate is believed only when it overlaps the
+  original's words by at least half *and* introduces a negation, direction verb
+  or environment. Loosening either took noise from 38.1% to 47.6% for no extra
+  catching.
+- Only one direction counts as evidence: a word the candidate has that the
+  original lacks. The reverse is far weaker, since a short slice drops words
+  routinely.
+
+### Known limits
+
+- **The gate barely gates with a weak engine.** Re-decoding fired on 41 of 64
+  clips, because low confidence is the trigger and tiny.en is unsure about
+  everything. For a tool whose premise is that most utterances paste instantly,
+  64% is far too often; the run took 24 s rather than 9 s.
+- **The case that motivated this stage is not demonstrated by that run.**
+  `cnf-003` (`do merge` for `don't merge`) is the failure no text-only stage can
+  see, but tiny.en transcribed that particular clip correctly, so there was no
+  error to recover and the hold it received is a false one. The mechanism is
+  covered by a unit test and by the text benchmark; the audio run shows the
+  stage working on the errors tiny.en did make, which is a different claim.
+
 ## [0.10.0] - 2026-09-27
 
 The acoustic stage now asks *which* word the recogniser fumbled, not just how
@@ -448,7 +506,8 @@ can be trusted.
 - Cannot recover a word that was never transcribed; that needs the audio and is
   planned for 0.3.
 
-[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/HarjjotSinghh/readback/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.11.0
 [0.10.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.10.0
 [0.9.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.9.0
 [0.8.0]: https://github.com/HarjjotSinghh/readback/releases/tag/v0.8.0
